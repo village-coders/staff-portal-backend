@@ -1,0 +1,27 @@
+{
+  "name": "hfa-staff-portal",
+  "version": "1.0.0",
+  "description": "Internal Financial Record System (IFRS) — Backend API for HFA Staff Portal",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "seed": "node seed.js"
+  },
+  "keywords": ["hfa", "ifrs", "claims", "financial", "api"],
+  "author": "Halal Food Authority",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-validator": "^7.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.16.3",
+    "multer": "^2.0.1",
+    "nodemon": "^3.1.14"
+  }
+}
