@@ -5,48 +5,103 @@ const User = require("./models/users");
 const connectToDb = require("./config/connectToDb");
 
 /**
- * Database Seeder — creates the first admin account.
+ * Database Seeder — creates default users for all 6 system roles:
+ * - user (staff)
+ * - financial_officer
+ * - ceo
+ * - accountant
+ * - admin
+ * - chairman
  *
- * Run once:  node seed.js
- *
- * ⚠️  Change the default password immediately after first login!
+ * Run once:  npm run seed
  */
 const seed = async () => {
     console.log("🌱  Starting database seed...\n");
 
     await connectToDb();
 
-    // Check if an admin already exists
-    const existing = await User.findOne({ role: "admin" });
-    if (existing) {
-        console.log("⚠️   An admin account already exists.");
-        console.log(`    Username: ${existing.username}`);
-        console.log("    Skipping seed. No changes made.\n");
-        await mongoose.disconnect();
-        process.exit(0);
+    // Define seed users
+    const seedUsers = [
+        {
+            name: "System Admin",
+            username: "admin",
+            email: "admin@hfa.org",
+            role: "admin",
+            password: "Admin@123",
+            department: "Administration",
+        },
+        {
+            name: "John Staff",
+            username: "staff",
+            email: "staff@hfa.org",
+            role: "user",
+            password: "Staff@123",
+            department: "Operations",
+        },
+        {
+            name: "Jane Financial Officer",
+            username: "fo",
+            email: "fo@hfa.org",
+            role: "financial_officer",
+            password: "Officer@123",
+            department: "Finance",
+        },
+        {
+            name: "Chief Executive Officer",
+            username: "ceo",
+            email: "ceo@hfa.org",
+            role: "ceo",
+            password: "Ceo@123",
+            department: "Executive",
+        },
+        {
+            name: "Board Chairman",
+            username: "chairman",
+            email: "chairman@hfa.org",
+            role: "chairman",
+            password: "Chairman@123",
+            department: "Board",
+        },
+        {
+            name: "Alice Accountant",
+            username: "accountant",
+            email: "accountant@hfa.org",
+            role: "accountant",
+            password: "Accountant@123",
+            department: "Finance",
+        },
+    ];
+
+    console.log("Checking and seeding users...");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    for (const u of seedUsers) {
+        const existing = await User.findOne({ username: u.username });
+        if (existing) {
+            console.log(`ℹ️   User '${u.username}' already exists. Skipping.`);
+            continue;
+        }
+
+        const hashedPassword = await bcrypt.hash(u.password, 12);
+        const createdUser = await User.create({
+            name: u.name,
+            username: u.username,
+            email: u.email,
+            role: u.role,
+            password: hashedPassword,
+            department: u.department,
+            active: true,
+        });
+
+        console.log(`✅  Created user [${createdUser.role}]:`);
+        console.log(`    Username  : ${createdUser.username}`);
+        console.log(`    Password  : ${u.password}`);
+        console.log(`    Email     : ${createdUser.email}`);
+        console.log("─────────────────────────────────────────────────────────");
     }
 
-    const defaultPassword = "Admin@123";
-    const hashedPassword = await bcrypt.hash(defaultPassword, 12);
-
-    const admin = await User.create({
-        name: "System Admin",
-        username: "admin",
-        password: hashedPassword,
-        email: "admin@hfa.org",
-        role: "admin",
-        department: "Administration",
-        active: true,
-    });
-
-    console.log("✅  Admin created successfully!\n");
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log(`  Username  : ${admin.username}`);
-    console.log(`  Password  : ${defaultPassword}`);
-    console.log(`  Email     : ${admin.email}`);
-    console.log(`  Role      : ${admin.role}`);
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("\n⚠️  IMPORTANT: Change the default password immediately after login!\n");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("🌱  Seeding completed.\n");
 
     await mongoose.disconnect();
     process.exit(0);
