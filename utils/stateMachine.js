@@ -32,7 +32,8 @@ const TRANSITIONS = {
     [STATUSES.VERIFIED]: {
         [STATUSES.APPROVED_FOR_PAYMENT]: ["ceo", "admin"],
         [STATUSES.FURTHER_APPROVAL]: ["ceo", "admin"],   // CEO escalates to Board
-        [STATUSES.NEW]: ["ceo", "admin"],                 // CEO returns to Financial Officer
+        [STATUSES.PENDING]: ["ceo", "admin"],            // CEO returns to Financial Officer / Pending
+        [STATUSES.NEW]: ["ceo", "admin"],                 // CEO returns to Financial Officer / New
     },
     [STATUSES.FURTHER_APPROVAL]: {
         [STATUSES.VERIFIED]: ["chairman", "admin"],  // Board approves → back to CEO

@@ -92,41 +92,29 @@ const createUser = async (req, res, next) => {
  */
 const updateUser = async (req, res, next) => {
     try {
-        // Hard block on password changes
-        if (req.body.password !== undefined) {
-            return res.status(400).json({
-                success: false,
-                message: "Password cannot be changed through this endpoint.",
-            });
+        const { name, email, role, department, active, password } = req.body;
+        const { id } = req.params;
+
+        const queryConditions = [{ username: id }];
+        if (mongoose.isValidObjectId(id)) {
+            queryConditions.push({ _id: id });
         }
 
-        const { name, email, role, department, active } = req.body;
-
-
-
-        const updates = {};
-        if (name !== undefined) updates.name = name;
-        if (email !== undefined) updates.email = email;
-        if (role !== undefined) updates.role = role;
-        if (department !== undefined) updates.department = department;
-        if (active !== undefined) updates.active = active;
-
-        if (Object.keys(updates).length === 0) {
-            return res
-                .status(400)
-                .json({ success: false, message: "No valid fields to update." });
-        }
-
-        const user = await User.findByIdAndUpdate(req.params.id, updates, {
-            new: true,
-            runValidators: true,
-        });
-
+        const user = await User.findOne({ $or: queryConditions });
         if (!user) {
-            return res
-                .status(404)
-                .json({ success: false, message: "User not found." });
+            return res.status(404).json({ success: false, message: "User not found." });
         }
+
+        if (name !== undefined) user.name = name;
+        if (email !== undefined) user.email = email;
+        if (role !== undefined) user.role = role;
+        if (department !== undefined) user.department = department;
+        if (active !== undefined) user.active = active;
+        if (password && password.trim() !== "") {
+            user.password = await bcrypt.hash(password, 12);
+        }
+
+        await user.save();
 
         res.status(200).json({
             success: true,
@@ -145,14 +133,21 @@ const updateUser = async (req, res, next) => {
  */
 const deleteUser = async (req, res, next) => {
     try {
-        if (req.params.id === req.user._id.toString()) {
+        const { id } = req.params;
+
+        if (req.user && (req.user._id.toString() === id || req.user.username === id)) {
             return res.status(400).json({
                 success: false,
                 message: "You cannot delete your own account.",
             });
         }
 
-        const user = await User.findByIdAndDelete(req.params.id);
+        const queryConditions = [{ username: id }];
+        if (mongoose.isValidObjectId(id)) {
+            queryConditions.push({ _id: id });
+        }
+
+        const user = await User.findOneAndDelete({ $or: queryConditions });
         if (!user) {
             return res
                 .status(404)

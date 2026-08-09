@@ -61,7 +61,7 @@ const dispatchTransitionNotifications = async (claim, fromStatus, toStatus) => {
             `Board Approval Required: Claim ${ref}`,
             `The CEO has escalated claim ${ref} for board-level review. Please assess and respond.`
         );
-    } else if (fromStatus === "VERIFIED" && toStatus === "NEW") {
+    } else if (fromStatus === "VERIFIED" && (toStatus === "NEW" || toStatus === "PENDING")) {
         await notifyRole(
             "financial_officer",
             `Claim ${ref} Returned by CEO`,
