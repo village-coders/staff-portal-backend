@@ -37,12 +37,12 @@ app.get("/", (req, res) => {
 });
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
-app.use("/api/v1/auth",          require("./routers/authRouter"));
-app.use("/api/v1/users",         require("./routers/userRouter"));
-app.use("/api/v1/claims",        require("./routers/claimRouter"));
-app.use("/api/v1/assets",        require("./routers/assetRouter"));
+app.use("/api/v1/auth", require("./routers/authRouter"));
+app.use("/api/v1/users", require("./routers/userRouter"));
+app.use("/api/v1/claims", require("./routers/claimRouter"));
+app.use("/api/v1/assets", require("./routers/assetRouter"));
 app.use("/api/v1/notifications", require("./routers/notificationRouter"));
-app.use("/api/v1/files",         require("./routers/fileRouter"));
+app.use("/api/v1/files", require("./routers/fileRouter"));
 
 // ─── 404 Catch-All ────────────────────────────────────────────────────────────
 app.use((req, res) => {
