@@ -5,7 +5,7 @@ const User = require("./models/users");
 const connectToDb = require("./config/connectToDb");
 
 /**
- * Database Seeder — creates the first super_admin account.
+ * Database Seeder — creates the first admin account.
  *
  * Run once:  node seed.js
  *
@@ -16,30 +16,30 @@ const seed = async () => {
 
     await connectToDb();
 
-    // Check if a super_admin already exists
-    const existing = await User.findOne({ role: "super_admin" });
+    // Check if an admin already exists
+    const existing = await User.findOne({ role: "admin" });
     if (existing) {
-        console.log("⚠️   A super_admin account already exists.");
+        console.log("⚠️   An admin account already exists.");
         console.log(`    Username: ${existing.username}`);
         console.log("    Skipping seed. No changes made.\n");
         await mongoose.disconnect();
         process.exit(0);
     }
 
-    const defaultPassword = "SuperAdmin@123";
+    const defaultPassword = "Admin@123";
     const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
     const admin = await User.create({
-        name: "System Super Admin",
-        username: "superadmin",
+        name: "System Admin",
+        username: "admin",
         password: hashedPassword,
-        email: "superadmin@hfa.org",
-        role: "super_admin",
+        email: "admin@hfa.org",
+        role: "admin",
         department: "Administration",
         active: true,
     });
 
-    console.log("✅  Super Admin created successfully!\n");
+    console.log("✅  Admin created successfully!\n");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log(`  Username  : ${admin.username}`);
     console.log(`  Password  : ${defaultPassword}`);

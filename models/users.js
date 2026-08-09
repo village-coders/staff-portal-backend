@@ -35,7 +35,6 @@ const userSchema = new Schema(
                 "accountant",
                 "admin",
                 "chairman",
-                "super_admin",
             ],
             default: "user",
         },

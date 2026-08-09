@@ -65,7 +65,7 @@ const protect = async (req, res, next) => {
  * @returns {Function} Express middleware
  *
  * @example
- *   router.get('/', protect, authorize('admin', 'super_admin'), getUsers);
+ *   router.get('/', protect, authorize('admin'), getUsers);
  */
 const authorize = (...roles) => {
     return (req, res, next) => {

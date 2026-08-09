@@ -201,7 +201,7 @@ const getClaims = async (req, res, next) => {
         } else if (role === "accountant") {
             baseFilter.status = { $in: ["APPROVED_FOR_PAYMENT", "PAID"] };
         }
-        // admin, super_admin: no base filter — access all claims
+        // admin: no base filter — access all claims
 
         // ── Optional explicit status filter ────────────────────────────────
         if (statusFilter) {
@@ -215,7 +215,7 @@ const getClaims = async (req, res, next) => {
                 }
                 baseFilter.status = statusFilter;
             } else {
-                // user, admin, super_admin can filter by any status
+                // user, admin can filter by any status
                 baseFilter.status = statusFilter;
             }
         }
@@ -496,12 +496,12 @@ const uploadClaimAttachments = async (req, res, next) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Controller: Hard delete (Super Admin only)
+// Controller: Hard delete (Admin only)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * DELETE /api/v1/claims/:id
- * Permanently removes a claim from the database (Super Admin only).
+ * Permanently removes a claim from the database (Admin only).
  */
 const deleteClaim = async (req, res, next) => {
     try {

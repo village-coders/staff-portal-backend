@@ -9,8 +9,8 @@ const { protect, authorize } = require("../middlewares/authMiddlewares");
 
 const router = express.Router();
 
-// All user management routes require auth + admin/super_admin role
-router.use(protect, authorize("admin", "super_admin"));
+// All user management routes require auth + admin role
+router.use(protect, authorize("admin"));
 
 // GET  /api/v1/users          — list all users (paginated)
 router.get("/", getUsers);

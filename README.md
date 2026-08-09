@@ -63,10 +63,10 @@ http://localhost:3001/api/v1
 ### Users — `/api/v1/users`
 | Method | Endpoint | Description | Roles |
 |--------|----------|-------------|-------|
-| GET | `/` | List all users (paginated) | admin, super_admin |
-| POST | `/` | Create a new user | admin, super_admin |
-| PUT | `/:id` | Update user (not password) | admin, super_admin |
-| DELETE | `/:id` | Delete user | admin, super_admin |
+| GET | `/` | List all users (paginated) | admin |
+| POST | `/` | Create a new user | admin |
+| PUT | `/:id` | Update user (not password) | admin |
+| DELETE | `/:id` | Delete user | admin |
 
 ### Claims — `/api/v1/claims`
 | Method | Endpoint | Description | Roles |
@@ -77,17 +77,17 @@ http://localhost:3001/api/v1
 | PATCH | `/:id/transition` | Transition claim status | varies (state machine) |
 | PUT | `/:id/resubmit` | Resubmit a PENDING claim | user |
 | POST | `/:id/attachments` | Upload attachments (GridFS) | all |
-| DELETE | `/:id` | Hard delete claim | super_admin |
+| DELETE | `/:id` | Hard delete claim | admin |
 
 ### Assets — `/api/v1/assets`
 | Method | Endpoint | Description | Roles |
 |--------|----------|-------------|-------|
 | GET | `/` | List all assets | all |
-| POST | `/` | Register new asset | admin, super_admin, financial_officer |
+| POST | `/` | Register new asset | admin, financial_officer |
 | GET | `/:id` | Get asset by ID or serial | all |
-| PUT | `/:id` | Update asset | admin, super_admin, financial_officer |
-| POST | `/:id/attachments` | Upload asset files (GridFS) | admin, super_admin, financial_officer |
-| DELETE | `/:id` | Delete asset | admin, super_admin |
+| PUT | `/:id` | Update asset | admin, financial_officer |
+| POST | `/:id/attachments` | Upload asset files (GridFS) | admin, financial_officer |
+| DELETE | `/:id` | Delete asset | admin |
 
 ### Notifications — `/api/v1/notifications`
 | Method | Endpoint | Description |
@@ -137,8 +137,7 @@ NEW ──→ VERIFIED ──→ APPROVED_FOR_PAYMENT ──→ PAID
 | `ceo` | Second reviewer — approves, escalates, or returns |
 | `chairman` | Board reviewer — approves or rejects escalated claims |
 | `accountant` | Payment processor — marks claims as PAID |
-| `admin` | User management and system oversight |
-| `super_admin` | Full system access including hard delete |
+| `admin` | User management and system oversight (including hard delete claims/assets) |
 
 ---
 

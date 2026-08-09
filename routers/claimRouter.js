@@ -17,7 +17,7 @@ const router = express.Router();
 router.use(protect);
 
 // POST /api/v1/claims               — submit a new claim (users only)
-router.post("/", authorize("user", "admin", "super_admin"), submitClaim);
+router.post("/", authorize("user", "admin"), submitClaim);
 
 // GET  /api/v1/claims               — list claims (role-filtered)
 router.get("/", getClaims);
@@ -29,13 +29,13 @@ router.get("/:id", getClaimById);
 // Body: { newStatus: string, note?: string }
 router.patch("/:id/transition", transitionClaim);
 
-// PUT /api/v1/claims/:id/resubmit   — resubmit PENDING claim (user/super_admin)
-router.put("/:id/resubmit", authorize("user", "super_admin"), resubmitClaim);
+// PUT /api/v1/claims/:id/resubmit   — resubmit PENDING claim (user/admin)
+router.put("/:id/resubmit", authorize("user", "admin"), resubmitClaim);
 
 // POST /api/v1/claims/:id/attachments — upload files via GridFS (field: "files")
 router.post("/:id/attachments", upload.array("files", 10), uploadClaimAttachments);
 
-// DELETE /api/v1/claims/:id         — hard delete (super_admin only)
-router.delete("/:id", authorize("super_admin"), deleteClaim);
+// DELETE /api/v1/claims/:id         — hard delete (admin only)
+router.delete("/:id", authorize("admin"), deleteClaim);
 
 module.exports = router;

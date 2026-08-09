@@ -3,7 +3,7 @@ const User = require("../models/users");
 
 /**
  * GET /api/v1/users
- * List all users — paginated with optional search (Admin / Super Admin only)
+ * List all users — paginated with optional search (Admin only)
  */
 const getUsers = async (req, res, next) => {
     try {
@@ -52,8 +52,7 @@ const getUsers = async (req, res, next) => {
 
 /**
  * POST /api/v1/users
- * Create a new user (Admin / Super Admin only)
- * Admin cannot create another super_admin — only super_admin can.
+ * Create a new user (Admin only)
  */
 const createUser = async (req, res, next) => {
     try {
@@ -63,14 +62,6 @@ const createUser = async (req, res, next) => {
             return res.status(400).json({
                 success: false,
                 message: "Name, username, password, and email are required.",
-            });
-        }
-
-        // Guard: only super_admin can create another super_admin
-        if (role === "super_admin" && req.user.role !== "super_admin") {
-            return res.status(403).json({
-                success: false,
-                message: "Only a super admin can create another super admin account.",
             });
         }
 
@@ -111,13 +102,7 @@ const updateUser = async (req, res, next) => {
 
         const { name, email, role, department, active } = req.body;
 
-        // Guard: only super_admin can assign super_admin role
-        if (role === "super_admin" && req.user.role !== "super_admin") {
-            return res.status(403).json({
-                success: false,
-                message: "Only a super admin can assign the super admin role.",
-            });
-        }
+
 
         const updates = {};
         if (name !== undefined) updates.name = name;
@@ -155,7 +140,7 @@ const updateUser = async (req, res, next) => {
 
 /**
  * DELETE /api/v1/users/:id
- * Delete a user account (Admin / Super Admin only)
+ * Delete a user account (Admin only)
  * Self-deletion is blocked.
  */
 const deleteUser = async (req, res, next) => {

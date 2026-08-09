@@ -21,25 +21,25 @@ const STATUSES = {
  */
 const TRANSITIONS = {
     [STATUSES.NEW]: {
-        [STATUSES.VERIFIED]: ["financial_officer", "super_admin"],
-        [STATUSES.PENDING]: ["financial_officer", "super_admin"],
-        [STATUSES.REJECTED]: ["financial_officer", "super_admin"],
+        [STATUSES.VERIFIED]: ["financial_officer", "admin"],
+        [STATUSES.PENDING]: ["financial_officer", "admin"],
+        [STATUSES.REJECTED]: ["financial_officer", "admin"],
     },
     [STATUSES.PENDING]: {
         // User resubmission — also handled by dedicated PUT /resubmit route
-        [STATUSES.NEW]: ["user", "super_admin"],
+        [STATUSES.NEW]: ["user", "admin"],
     },
     [STATUSES.VERIFIED]: {
-        [STATUSES.APPROVED_FOR_PAYMENT]: ["ceo", "super_admin"],
-        [STATUSES.FURTHER_APPROVAL]: ["ceo", "super_admin"],   // CEO escalates to Board
-        [STATUSES.NEW]: ["ceo", "super_admin"],                 // CEO returns to Financial Officer
+        [STATUSES.APPROVED_FOR_PAYMENT]: ["ceo", "admin"],
+        [STATUSES.FURTHER_APPROVAL]: ["ceo", "admin"],   // CEO escalates to Board
+        [STATUSES.NEW]: ["ceo", "admin"],                 // CEO returns to Financial Officer
     },
     [STATUSES.FURTHER_APPROVAL]: {
-        [STATUSES.VERIFIED]: ["chairman", "super_admin"],  // Board approves → back to CEO
-        [STATUSES.REJECTED]: ["chairman", "super_admin"],
+        [STATUSES.VERIFIED]: ["chairman", "admin"],  // Board approves → back to CEO
+        [STATUSES.REJECTED]: ["chairman", "admin"],
     },
     [STATUSES.APPROVED_FOR_PAYMENT]: {
-        [STATUSES.PAID]: ["accountant", "super_admin"],
+        [STATUSES.PAID]: ["accountant", "admin"],
     },
     // PAID and REJECTED are terminal states — no outgoing transitions
 };
