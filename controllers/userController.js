@@ -16,13 +16,13 @@ const getUsers = async (req, res, next) => {
 
         const searchFilter = search
             ? {
-                  $or: [
-                      { name: { $regex: search, $options: "i" } },
-                      { username: { $regex: search, $options: "i" } },
-                      { email: { $regex: search, $options: "i" } },
-                      { department: { $regex: search, $options: "i" } },
-                  ],
-              }
+                $or: [
+                    { name: { $regex: search, $options: "i" } },
+                    { username: { $regex: search, $options: "i" } },
+                    { email: { $regex: search, $options: "i" } },
+                    { department: { $regex: search, $options: "i" } },
+                ],
+            }
             : {};
 
         const roleCondition = roleFilter ? { role: roleFilter } : {};
