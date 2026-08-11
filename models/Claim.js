@@ -43,8 +43,8 @@ const itemSchema = new Schema(
         category: { type: String, required: [true, "Item category is required"] },
         currency: {
             type: String,
-            enum: ["NGN", "GBP", "USD", "EUR"],
-            default: "NGN",
+            enum: ["GBP", "USD", "EUR"],
+            default: "GBP",
         },
         payMode: {
             type: String,
