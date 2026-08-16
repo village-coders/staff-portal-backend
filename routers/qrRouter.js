@@ -4,6 +4,7 @@ const {
     getQRCodes,
     getQRCodeById,
     getPublicQRCode,
+    streamPublicQRDocument,
     uploadQRDocument,
     deleteQRCode,
 } = require("../controllers/qrController");
@@ -11,7 +12,10 @@ const upload = require("../middlewares/upload");
 
 const router = express.Router();
 
-// Public scan endpoint
+// Direct file streaming when QR code is scanned
+router.get("/scan/:codeId", streamPublicQRDocument);
+
+// Public scan JSON metadata endpoint
 router.get("/public/:codeId", getPublicQRCode);
 
 // QR Code endpoints

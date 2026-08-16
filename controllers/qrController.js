@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const QRCode = require("../models/QRCode");
-const { uploadToGridFS, deleteFromGridFS } = require("../utils/gridfs");
+const { uploadToGridFS, downloadFromGridFS, deleteFromGridFS } = require("../utils/gridfs");
 
 /**
  * Generate unique human-readable codeId (e.g., QR-849201)
@@ -141,6 +141,38 @@ const getPublicQRCode = async (req, res, next) => {
 };
 
 /**
+ * GET /api/v1/qrcodes/scan/:codeId
+ * Direct scanner stream endpoint — streams the uploaded document directly from GridFS
+ */
+const streamPublicQRDocument = async (req, res, next) => {
+    try {
+        const { codeId } = req.params;
+        const queryConditions = [{ codeId }];
+        if (mongoose.isValidObjectId(codeId)) {
+            queryConditions.push({ _id: codeId });
+        }
+
+        const qrCode = await QRCode.findOneAndUpdate(
+            { $or: queryConditions },
+            {
+                $inc: { scanCount: 1 },
+                $set: { lastScannedAt: new Date() },
+            },
+            { new: true }
+        );
+
+        if (!qrCode || !qrCode.attachments || qrCode.attachments.length === 0) {
+            return res.status(404).send("No document uploaded for this QR code yet.");
+        }
+
+        const attachment = qrCode.attachments[0];
+        await downloadFromGridFS(attachment.fileUrl, res);
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
  * POST /api/v1/qrcodes/:id/document
  * Upload or replace the document for a QR code stored in MongoDB GridFS
  */
@@ -252,6 +284,7 @@ module.exports = {
     getQRCodes,
     getQRCodeById,
     getPublicQRCode,
+    streamPublicQRDocument,
     uploadQRDocument,
     deleteQRCode,
 };
