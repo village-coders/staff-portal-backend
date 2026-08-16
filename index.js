@@ -9,10 +9,30 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ─── Core Middleware ──────────────────────────────────────────────────────────
+const allowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
+    process.env.CLIENT_URL,
+].filter(Boolean);
+
 app.use(
     cors({
-        origin: process.env.CLIENT_URL || "*",
+        origin: (origin, callback) => {
+            // Allow all localhost origins in dev or no origin (curl/mobile)
+            if (!origin || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:") || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(null, true);
+            }
+        },
         credentials: true,
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     })
 );
 app.use(express.json());
@@ -32,6 +52,7 @@ app.get("/", (req, res) => {
             assets: "/api/v1/assets",
             notifications: "/api/v1/notifications",
             files: "/api/v1/files",
+            qrcodes: "/api/v1/qrcodes",
         },
     });
 });
@@ -43,6 +64,7 @@ app.use("/api/v1/claims", require("./routers/claimRouter"));
 app.use("/api/v1/assets", require("./routers/assetRouter"));
 app.use("/api/v1/notifications", require("./routers/notificationRouter"));
 app.use("/api/v1/files", require("./routers/fileRouter"));
+app.use("/api/v1/qrcodes", require("./routers/qrRouter"));
 
 // ─── 404 Catch-All ────────────────────────────────────────────────────────────
 app.use((req, res) => {
