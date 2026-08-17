@@ -32,6 +32,16 @@ const qrCodeSchema = new Schema(
             trim: true,
             default: "",
         },
+        // Creator info
+        createdByName: {
+            type: String,
+            default: "Admin",
+            trim: true,
+        },
+        createdBy: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+        },
         // GridFS uploaded attachment (PDF, Word, Image, Document)
         attachments: [attachmentSchema],
         // Analytics

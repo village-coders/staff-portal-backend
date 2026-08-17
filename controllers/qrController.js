@@ -23,7 +23,7 @@ const generateCodeId = async (prefix = "QR") => {
  */
 const createQRCode = async (req, res, next) => {
     try {
-        const { codeId: customCodeId, title } = req.body || {};
+        const { codeId: customCodeId, title, createdByName, createdBy } = req.body || {};
 
         let codeId = customCodeId && customCodeId.trim();
         if (codeId) {
@@ -39,10 +39,14 @@ const createQRCode = async (req, res, next) => {
         }
 
         const qrTitle = title && title.trim() ? title.trim() : `QR Code ${codeId}`;
+        const creator = (createdByName && createdByName.trim()) || req.user?.name || req.user?.username || "Admin";
+        const creatorId = createdBy || req.user?._id;
 
         const qrCode = await QRCode.create({
             codeId,
             title: qrTitle,
+            createdByName: creator,
+            createdBy: creatorId,
             attachments: [],
         });
 
