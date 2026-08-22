@@ -340,6 +340,18 @@ const transitionClaim = async (req, res, next) => {
         claim.status = newStatus;
         if (note !== undefined) claim.officerNote = note;
 
+        // Derive target role for this transition if not provided
+        let targetRole = req.body.targetRole;
+        if (!targetRole) {
+            if (newStatus === "VERIFIED") targetRole = "ceo";
+            else if (newStatus === "FURTHER_APPROVAL") targetRole = "chairman";
+            else if (newStatus === "APPROVED_FOR_PAYMENT") targetRole = "accountant";
+            else if (newStatus === "PAID") targetRole = "user";
+            else if (newStatus === "PENDING") targetRole = "user";
+            else if (newStatus === "NEW") targetRole = "financial_officer";
+            else if (newStatus === "REJECTED") targetRole = "user";
+        }
+
         // Append audit history
         claim.history.push({
             actorId: actor._id,
@@ -348,6 +360,7 @@ const transitionClaim = async (req, res, next) => {
             fromStatus,
             toStatus: newStatus,
             note: note || "",
+            targetRole,
             timestamp: new Date(),
         });
 

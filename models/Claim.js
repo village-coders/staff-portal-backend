@@ -10,6 +10,7 @@ const historyEntrySchema = new Schema(
         fromStatus: { type: String, default: null },
         toStatus: { type: String },
         note: { type: String, default: "" },
+        targetRole: { type: String },
         timestamp: { type: Date, default: Date.now },
     },
     { _id: false }
