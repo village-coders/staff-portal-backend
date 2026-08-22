@@ -18,6 +18,14 @@ const seed = async () => {
     // Define seed users (Extracted from active database)
     const seedUsers = [
         {
+            name: "Super Admin",
+            username: "superadmin",
+            email: "superadmin@hfa.org",
+            role: "super_admin",
+            password: "SuperAdmin@123",
+            department: "Executive",
+        },
+        {
             name: "Jaweria",
             username: "Jaweria",
             email: "jaweria@yahoo.com",
@@ -41,6 +49,14 @@ const seed = async () => {
             password: "$2a$12$d/kc8.8iYp6zs2zVKdykmOU4rjCOMsHguvD1Q44btnUet14T4Rgda",
             department: "Operations",
         },
+        {
+            name: "Haytham",
+            username: "Haytham",
+            email: "[EMAIL_ADDRESS]",
+            role: "financial_officer",
+            password: " ",
+            department: "Operations",
+        }
     ];
 
     // Seed QR Portal Users

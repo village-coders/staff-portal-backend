@@ -21,26 +21,26 @@ const STATUSES = {
  */
 const TRANSITIONS = {
     [STATUSES.NEW]: {
-        [STATUSES.VERIFIED]: ["financial_officer", "admin"],
-        [STATUSES.PENDING]: ["financial_officer", "admin"],
-        [STATUSES.REJECTED]: ["financial_officer", "admin"],
+        [STATUSES.VERIFIED]: ["financial_officer", "admin", "super_admin"],
+        [STATUSES.PENDING]: ["financial_officer", "admin", "super_admin"],
+        [STATUSES.REJECTED]: ["financial_officer", "admin", "super_admin"],
     },
     [STATUSES.PENDING]: {
         // User resubmission — also handled by dedicated PUT /resubmit route
-        [STATUSES.NEW]: ["user", "admin"],
+        [STATUSES.NEW]: ["user", "admin", "super_admin"],
     },
     [STATUSES.VERIFIED]: {
-        [STATUSES.APPROVED_FOR_PAYMENT]: ["ceo", "admin"],
-        [STATUSES.FURTHER_APPROVAL]: ["ceo", "admin"],   // CEO escalates to Board
-        [STATUSES.PENDING]: ["ceo", "admin"],            // CEO returns to Financial Officer / Pending
-        [STATUSES.NEW]: ["ceo", "admin"],                 // CEO returns to Financial Officer / New
+        [STATUSES.APPROVED_FOR_PAYMENT]: ["ceo", "admin", "super_admin"],
+        [STATUSES.FURTHER_APPROVAL]: ["ceo", "admin", "super_admin"],   // CEO escalates to Board
+        [STATUSES.PENDING]: ["ceo", "admin", "super_admin"],            // CEO returns to Financial Officer / Pending
+        [STATUSES.NEW]: ["ceo", "admin", "super_admin"],                 // CEO returns to Financial Officer / New
     },
     [STATUSES.FURTHER_APPROVAL]: {
-        [STATUSES.VERIFIED]: ["chairman", "admin"],  // Board approves → back to CEO
-        [STATUSES.REJECTED]: ["chairman", "admin"],
+        [STATUSES.VERIFIED]: ["chairman", "admin", "super_admin"],  // Board approves → back to CEO
+        [STATUSES.REJECTED]: ["chairman", "admin", "super_admin"],
     },
     [STATUSES.APPROVED_FOR_PAYMENT]: {
-        [STATUSES.PAID]: ["accountant", "admin"],
+        [STATUSES.PAID]: ["accountant", "admin", "super_admin"],
     },
     // PAID and REJECTED are terminal states — no outgoing transitions
 };

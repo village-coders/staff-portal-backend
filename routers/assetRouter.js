@@ -21,7 +21,7 @@ router.get("/", getAssets);
 // POST /api/v1/assets           — register a new asset
 router.post(
     "/",
-    authorize("admin", "financial_officer"),
+    authorize("admin", "super_admin", "financial_officer"),
     createAsset
 );
 
@@ -31,19 +31,19 @@ router.get("/:id", getAssetById);
 // PUT  /api/v1/assets/:id       — update asset details (serial number immutable)
 router.put(
     "/:id",
-    authorize("admin", "financial_officer"),
+    authorize("admin", "super_admin", "financial_officer"),
     updateAsset
 );
 
 // POST /api/v1/assets/:id/attachments — upload files for an asset (GridFS)
 router.post(
     "/:id/attachments",
-    authorize("admin", "financial_officer"),
+    authorize("admin", "super_admin", "financial_officer"),
     upload.array("files", 10),
     uploadAssetAttachments
 );
 
-// DELETE /api/v1/assets/:id     — delete asset (admin)
-router.delete("/:id", authorize("admin"), deleteAsset);
+// DELETE /api/v1/assets/:id     — delete asset (super_admin only)
+router.delete("/:id", authorize("super_admin"), deleteAsset);
 
 module.exports = router;
