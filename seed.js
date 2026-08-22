@@ -50,7 +50,7 @@ const seed = async () => {
             username: "admin",
             email: "admin@hfa.org",
             role: "admin",
-            password: "$2a$12$9qTX1/LK5yew.4vtQPHqlu8lBwIMivS8xYlJjthwLmy6eLtyZ4VcO",
+            password: "abc123",
             department: "Administration",
         },
     ];
