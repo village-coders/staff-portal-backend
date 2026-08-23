@@ -15,8 +15,9 @@ router.use(protect);
 // Query: ?unread=true  to filter unread only
 router.get("/", getNotifications);
 
-// PATCH /api/v1/notifications/mark-read    — mark ALL user notifications as read
+// PATCH /api/v1/notifications/mark-read or /read-all — mark ALL user notifications as read
 router.patch("/mark-read", markAllRead);
+router.patch("/read-all", markAllRead);
 
 // PATCH /api/v1/notifications/:id/mark-read — mark a single notification as read
 router.patch("/:id/mark-read", markOneRead);
