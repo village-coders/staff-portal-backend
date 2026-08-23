@@ -3,10 +3,12 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const User = require("./models/users");
 const QRUser = require("./models/QRUser");
+const QRCode = require("./models/QRCode");
+const { seedQrCodes } = require("./seedQRCodes");
 const connectToDb = require("./config/connectToDb");
 
 /**
- * Database Seeder — creates default staff and QR portal users extracted from the database:
+ * Database Seeder — creates default staff, QR portal users, and QR Codes extracted from the database:
  *
  * Run once:  npm run seed
  */
@@ -52,7 +54,7 @@ const seed = async () => {
         {
             name: "Haytham",
             username: "Haytham",
-            email: "[EMAIL_ADDRESS]",
+            email: "haytham@halalfoodauthority.com",
             role: "financial_officer",
             password: " ",
             department: "Operations",
@@ -123,6 +125,20 @@ const seed = async () => {
         });
 
         console.log(`✅  Created QR User [${u.role}]: ${u.username} (${u.email})`);
+    }
+
+    console.log("\nChecking and seeding QR Codes...");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    for (const qrData of seedQrCodes) {
+        const existing = await QRCode.findOne({ codeId: qrData.codeId });
+        if (existing) {
+            console.log(`ℹ️   QR Code '${qrData.codeId}' already exists. Skipping.`);
+            continue;
+        }
+
+        const createdQR = await QRCode.create(qrData);
+        console.log(`✅  Created QR Code [${createdQR.codeId}]: ${createdQR.title}`);
     }
 
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "seed:qr": "node seedQRCodes.js"
   },
   "keywords": ["hfa", "ifrs", "claims", "financial", "api"],
   "author": "Halal Food Authority",
