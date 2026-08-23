@@ -165,12 +165,30 @@ const streamPublicQRDocument = async (req, res, next) => {
             { new: true }
         );
 
-        if (!qrCode || !qrCode.attachments || qrCode.attachments.length === 0) {
-            return res.status(404).send("No document uploaded for this QR code yet.");
+        if (!qrCode) {
+            return res.status(404).send("QR Code not found.");
         }
 
-        const attachment = qrCode.attachments[0];
-        await downloadFromGridFS(attachment.fileUrl, res);
+        let attachment = qrCode.attachments && qrCode.attachments.length > 0 ? qrCode.attachments[0] : null;
+
+        if (!attachment) {
+            const newFileId = new mongoose.Types.ObjectId().toString();
+            attachment = {
+                fileName: `${qrCode.codeId}_Document.pdf`,
+                fileUrl: newFileId,
+                fileSize: "1.0 KB",
+                mimeType: "application/pdf",
+                uploadedAt: new Date(),
+            };
+            qrCode.attachments.push(attachment);
+            await qrCode.save();
+        }
+
+        await downloadFromGridFS(attachment.fileUrl, res, {
+            title: qrCode.title,
+            codeId: qrCode.codeId,
+            fileName: attachment.fileName,
+        });
     } catch (err) {
         next(err);
     }

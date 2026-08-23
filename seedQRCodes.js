@@ -180,6 +180,9 @@ const seedQrCodes = [
     }
 ];
 
+const { uploadBufferWithIdToGridFS } = require("./utils/gridfs");
+const { generatePlaceholderPdf } = require("./utils/pdfHelper");
+
 /**
  * Database Seeder for QR Codes
  */
@@ -188,27 +191,43 @@ const seedQRCodes = async () => {
 
     await connectToDb();
 
-    console.log("Checking and seeding QR Codes...");
+    console.log("Checking and seeding QR Codes & GridFS attachments...");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     let createdCount = 0;
     let skippedCount = 0;
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: "uploads" });
 
     for (const qrData of seedQrCodes) {
-        const existing = await QRCode.findOne({ codeId: qrData.codeId });
-        if (existing) {
-            console.log(`ℹ️   QR Code '${qrData.codeId}' already exists. Skipping.`);
+        let qrDoc = await QRCode.findOne({ codeId: qrData.codeId });
+        if (!qrDoc) {
+            qrDoc = await QRCode.create(qrData);
+            console.log(`✅  Created QR Code [${qrDoc.codeId}]: ${qrDoc.title}`);
+            createdCount++;
+        } else {
+            console.log(`ℹ️   QR Code '${qrData.codeId}' metadata already exists.`);
             skippedCount++;
-            continue;
         }
 
-        const createdQR = await QRCode.create(qrData);
-        console.log(`✅  Created QR Code [${createdQR.codeId}]: ${createdQR.title} (${createdQR.attachments.length} attachment(s))`);
-        createdCount++;
+        // Ensure GridFS files exist for all attachments
+        for (const att of (qrDoc.attachments || [])) {
+            if (!att.fileUrl) continue;
+            try {
+                const objectId = new mongoose.Types.ObjectId(att.fileUrl);
+                const files = await bucket.find({ _id: objectId }).toArray();
+                if (!files || files.length === 0) {
+                    const pdfBuffer = generatePlaceholderPdf(qrDoc.title, qrDoc.codeId, att.fileName);
+                    await uploadBufferWithIdToGridFS(objectId, pdfBuffer, att.fileName, att.mimeType || "application/pdf");
+                    console.log(`   📄  Seeded missing GridFS binary file [${att.fileUrl}]: ${att.fileName}`);
+                }
+            } catch (err) {
+                console.error(`   ⚠️  Error verifying GridFS file for ${att.fileName}:`, err.message);
+            }
+        }
     }
 
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log(`🌱  QR Code Seeding complete: ${createdCount} created, ${skippedCount} skipped.\n`);
+    console.log(`🌱  QR Code & GridFS Seeding complete: ${createdCount} metadata created, ${skippedCount} existing.\n`);
 
     await mongoose.disconnect();
     process.exit(0);
