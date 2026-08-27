@@ -12,7 +12,7 @@ const ALLOWED_MIME_TYPES = [
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ];
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024; // 30 MB
 
 /**
  * Filter function — only allow permitted MIME types
