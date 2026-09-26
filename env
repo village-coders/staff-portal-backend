@@ -1,0 +1,7 @@
+PORT=3001
+MONGO_URI=mongodb+srv://olamilekanmuhayad_db_user:AezdBVryoyuxKH08@cluster0.qf7yt17.mongodb.net/?appName=Cluster0
+DB_NAME=HfaStaffPortal
+JWT_SECRET=skdflsjfllksjdfldslkfjdjfdjdlk
+JWT_EXPIRES_IN=7d
+NODE_ENV=development
+CLIENT_URL=http://localhost:5174

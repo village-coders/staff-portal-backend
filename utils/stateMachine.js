@@ -6,10 +6,13 @@
  */
 
 const STATUSES = {
-    NEW: "NEW",
+    SUBMITTED: "SUBMITTED",
+    NEW: "NEW", // legacy compatibility
     PENDING: "PENDING",
     VERIFIED: "VERIFIED",
     FURTHER_APPROVAL: "FURTHER_APPROVAL",
+    FURTHER_APPROVAL_APPROVED: "FURTHER_APPROVAL_APPROVED",
+    FURTHER_APPROVAL_REJECTED: "FURTHER_APPROVAL_REJECTED",
     APPROVED_FOR_PAYMENT: "APPROVED_FOR_PAYMENT",
     PAID: "PAID",
     REJECTED: "REJECTED",
@@ -20,6 +23,11 @@ const STATUSES = {
  * { fromStatus: { toStatus: [allowedRoles] } }
  */
 const TRANSITIONS = {
+    [STATUSES.SUBMITTED]: {
+        [STATUSES.VERIFIED]: ["financial_officer", "admin", "super_admin"],
+        [STATUSES.PENDING]: ["financial_officer", "admin", "super_admin"],
+        [STATUSES.REJECTED]: ["financial_officer", "admin", "super_admin"],
+    },
     [STATUSES.NEW]: {
         [STATUSES.VERIFIED]: ["financial_officer", "admin", "super_admin"],
         [STATUSES.PENDING]: ["financial_officer", "admin", "super_admin"],
@@ -27,17 +35,34 @@ const TRANSITIONS = {
     },
     [STATUSES.PENDING]: {
         // User resubmission — also handled by dedicated PUT /resubmit route
+        [STATUSES.SUBMITTED]: ["user", "admin", "super_admin"],
         [STATUSES.NEW]: ["user", "admin", "super_admin"],
     },
     [STATUSES.VERIFIED]: {
         [STATUSES.APPROVED_FOR_PAYMENT]: ["ceo", "admin", "super_admin"],
         [STATUSES.FURTHER_APPROVAL]: ["ceo", "admin", "super_admin"],   // CEO escalates to Board
         [STATUSES.PENDING]: ["ceo", "admin", "super_admin"],            // CEO returns to Financial Officer / Pending
-        [STATUSES.NEW]: ["ceo", "admin", "super_admin"],                 // CEO returns to Financial Officer / New
+        [STATUSES.SUBMITTED]: ["ceo", "admin", "super_admin"],          // CEO returns to Financial Officer / Submitted
+        [STATUSES.NEW]: ["ceo", "admin", "super_admin"],                // Legacy
+        [STATUSES.REJECTED]: ["ceo", "admin", "super_admin"],
     },
     [STATUSES.FURTHER_APPROVAL]: {
-        [STATUSES.VERIFIED]: ["chairman", "admin", "super_admin"],  // Board approves → back to CEO
+        [STATUSES.FURTHER_APPROVAL_APPROVED]: ["chairman", "admin", "super_admin"], // Board approves → back to CEO
+        [STATUSES.FURTHER_APPROVAL_REJECTED]: ["chairman", "admin", "super_admin"], // Board rejects → back to CEO
+        [STATUSES.VERIFIED]: ["chairman", "admin", "super_admin"],                 // Legacy fallback
         [STATUSES.REJECTED]: ["chairman", "admin", "super_admin"],
+    },
+    [STATUSES.FURTHER_APPROVAL_APPROVED]: {
+        [STATUSES.APPROVED_FOR_PAYMENT]: ["ceo", "admin", "super_admin"], // CEO approves for payment
+        [STATUSES.SUBMITTED]: ["ceo", "admin", "super_admin"],            // CEO returns to FO
+        [STATUSES.PENDING]: ["ceo", "admin", "super_admin"],
+        [STATUSES.REJECTED]: ["ceo", "admin", "super_admin"],
+    },
+    [STATUSES.FURTHER_APPROVAL_REJECTED]: {
+        [STATUSES.REJECTED]: ["ceo", "admin", "super_admin"],             // CEO rejects
+        [STATUSES.PENDING]: ["ceo", "admin", "super_admin"],              // CEO returns to user for info
+        [STATUSES.SUBMITTED]: ["ceo", "admin", "super_admin"],            // CEO returns to FO
+        [STATUSES.FURTHER_APPROVAL]: ["ceo", "admin", "super_admin"],     // CEO re-escalates to board
     },
     [STATUSES.APPROVED_FOR_PAYMENT]: {
         [STATUSES.PAID]: ["accountant", "admin", "super_admin"],

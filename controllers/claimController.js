@@ -20,30 +20,30 @@ const dispatchTransitionNotifications = async (claim, fromStatus, toStatus) => {
     const notifyRole = (role, title, message, type = "claim") =>
         sendNotificationToRole({ role, type, title, message, claimId });
 
-    if (fromStatus === "NEW" && toStatus === "VERIFIED") {
+    if ((fromStatus === "SUBMITTED" || fromStatus === "NEW") && toStatus === "VERIFIED") {
         await notifyClaimant(
             `Claim ${ref} Verified`,
             `Your claim ${ref} has been verified by the Financial Officer and forwarded to the CEO.`,
             "verified"
         );
-    } else if (fromStatus === "NEW" && toStatus === "PENDING") {
+    } else if ((fromStatus === "SUBMITTED" || fromStatus === "NEW") && toStatus === "PENDING") {
         await notifyClaimant(
             `Action Required: Claim ${ref}`,
             `The Financial Officer has sent feedback on your claim ${ref}. Please review the note and resubmit.`,
             "pending"
         );
-    } else if (fromStatus === "NEW" && toStatus === "REJECTED") {
+    } else if ((fromStatus === "SUBMITTED" || fromStatus === "NEW") && toStatus === "REJECTED") {
         await notifyClaimant(
             `Claim ${ref} Rejected`,
             `Your claim ${ref} has been rejected by the Financial Officer.`
         );
-    } else if (fromStatus === "PENDING" && toStatus === "NEW") {
+    } else if (fromStatus === "PENDING" && (toStatus === "SUBMITTED" || toStatus === "NEW")) {
         await notifyRole(
             "financial_officer",
             `Claim ${ref} Resubmitted`,
             `Claim ${ref} has been resubmitted by the claimant and is awaiting your review.`
         );
-    } else if (fromStatus === "VERIFIED" && toStatus === "APPROVED_FOR_PAYMENT") {
+    } else if ((fromStatus === "VERIFIED" || fromStatus === "FURTHER_APPROVAL_APPROVED") && toStatus === "APPROVED_FOR_PAYMENT") {
         await notifyClaimant(
             `Claim ${ref} Approved for Payment`,
             `Great news! Your claim ${ref} has been approved by the CEO and is queued for payment.`,
@@ -59,9 +59,12 @@ const dispatchTransitionNotifications = async (claim, fromStatus, toStatus) => {
         await notifyRole(
             "chairman",
             `Board Approval Required: Claim ${ref}`,
-            `The CEO has escalated claim ${ref} for board-level review. Please assess and respond.`
+            `The CEO has escalated claim ${ref} for board-level review (Further Approval). Please assess and respond.`
         );
-    } else if (fromStatus === "VERIFIED" && (toStatus === "NEW" || toStatus === "PENDING")) {
+    } else if (
+        (fromStatus === "VERIFIED" || fromStatus === "FURTHER_APPROVAL_APPROVED" || fromStatus === "FURTHER_APPROVAL_REJECTED") &&
+        (toStatus === "SUBMITTED" || toStatus === "NEW" || toStatus === "PENDING")
+    ) {
         await notifyRole(
             "financial_officer",
             `Claim ${ref} Returned by CEO`,
@@ -71,22 +74,28 @@ const dispatchTransitionNotifications = async (claim, fromStatus, toStatus) => {
             `Claim ${ref} Under Further Review`,
             `Your claim ${ref} has been returned by the CEO for further review by the Financial Officer.`
         );
-    } else if (fromStatus === "FURTHER_APPROVAL" && toStatus === "VERIFIED") {
+    } else if (fromStatus === "FURTHER_APPROVAL" && (toStatus === "FURTHER_APPROVAL_APPROVED" || toStatus === "VERIFIED")) {
         await notifyRole(
             "ceo",
             `Board Approved: Claim ${ref}`,
-            `The Board has approved claim ${ref}. It has been returned to you for final action.`
+            `The Board has approved claim ${ref} (Further Approval Approved). It has been returned to you for final action.`
         );
-    } else if (fromStatus === "FURTHER_APPROVAL" && toStatus === "REJECTED") {
-        await notifyClaimant(
-            `Claim ${ref} Rejected by Board`,
-            `Your claim ${ref} has been reviewed and rejected by the Board of Directors.`
+    } else if (fromStatus === "FURTHER_APPROVAL" && (toStatus === "FURTHER_APPROVAL_REJECTED" || toStatus === "REJECTED")) {
+        await notifyRole(
+            "ceo",
+            `Board Rejected: Claim ${ref}`,
+            `The Board has rejected claim ${ref} (Further Approval Rejected). It has been returned to you for review.`
         );
     } else if (fromStatus === "APPROVED_FOR_PAYMENT" && toStatus === "PAID") {
         await notifyClaimant(
             `Claim ${ref} Paid`,
             `Your claim ${ref} has been successfully processed. Payment has been disbursed.`,
             "paid"
+        );
+    } else if (toStatus === "REJECTED") {
+        await notifyClaimant(
+            `Claim ${ref} Rejected`,
+            `Your claim ${ref} has been rejected.`
         );
     }
 };
@@ -135,14 +144,14 @@ const submitClaim = async (req, res, next) => {
             reasons: reasons || [],
             items,
             subtotals,
-            status: "NEW",
+            status: "SUBMITTED",
             history: [
                 {
                     actorId: req.user._id,
                     actorName: req.user.name,
                     actorRole: req.user.role,
                     fromStatus: null,
-                    toStatus: "NEW",
+                    toStatus: "SUBMITTED",
                     note: "Claim submitted.",
                     timestamp: new Date(),
                 },
@@ -191,13 +200,26 @@ const getClaims = async (req, res, next) => {
         if (role === "user") {
             baseFilter.claimantId = req.user._id;
         } else if (role === "financial_officer") {
-            baseFilter.status = { $in: ["NEW", "PENDING", "REJECTED", "VERIFIED"] };
+            baseFilter.status = { $in: ["SUBMITTED", "NEW", "PENDING", "REJECTED", "VERIFIED"] };
         } else if (role === "ceo") {
             baseFilter.status = {
-                $in: ["VERIFIED", "FURTHER_APPROVAL", "APPROVED_FOR_PAYMENT", "PAID"],
+                $in: [
+                    "VERIFIED",
+                    "FURTHER_APPROVAL",
+                    "FURTHER_APPROVAL_APPROVED",
+                    "FURTHER_APPROVAL_REJECTED",
+                    "APPROVED_FOR_PAYMENT",
+                    "PAID",
+                ],
             };
         } else if (role === "chairman") {
-            baseFilter.status = { $in: ["FURTHER_APPROVAL"] };
+            baseFilter.status = {
+                $in: [
+                    "FURTHER_APPROVAL",
+                    "FURTHER_APPROVAL_APPROVED",
+                    "FURTHER_APPROVAL_REJECTED",
+                ],
+            };
         } else if (role === "accountant") {
             baseFilter.status = { $in: ["APPROVED_FOR_PAYMENT", "PAID"] };
         }
@@ -345,10 +367,11 @@ const transitionClaim = async (req, res, next) => {
         if (!targetRole) {
             if (newStatus === "VERIFIED") targetRole = "ceo";
             else if (newStatus === "FURTHER_APPROVAL") targetRole = "chairman";
+            else if (newStatus === "FURTHER_APPROVAL_APPROVED" || newStatus === "FURTHER_APPROVAL_REJECTED") targetRole = "ceo";
             else if (newStatus === "APPROVED_FOR_PAYMENT") targetRole = "accountant";
             else if (newStatus === "PAID") targetRole = "user";
             else if (newStatus === "PENDING") targetRole = "user";
-            else if (newStatus === "NEW") targetRole = "financial_officer";
+            else if (newStatus === "SUBMITTED" || newStatus === "NEW") targetRole = "financial_officer";
             else if (newStatus === "REJECTED") targetRole = "user";
         }
 
@@ -416,13 +439,13 @@ const resubmitClaim = async (req, res, next) => {
             });
         }
 
-        claim.status = "NEW";
+        claim.status = "SUBMITTED";
         claim.history.push({
             actorId: req.user._id,
             actorName: req.user.name,
             actorRole: req.user.role,
             fromStatus: "PENDING",
-            toStatus: "NEW",
+            toStatus: "SUBMITTED",
             note: note || "Claim resubmitted after addressing feedback.",
             timestamp: new Date(),
         });

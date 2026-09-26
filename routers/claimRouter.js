@@ -35,7 +35,7 @@ router.put("/:id/resubmit", authorize("user", "admin", "super_admin"), resubmitC
 // POST /api/v1/claims/:id/attachments — upload files via GridFS (field: "files")
 router.post("/:id/attachments", upload.array("files", 10), uploadClaimAttachments);
 
-// DELETE /api/v1/claims/:id         — hard delete (super_admin only)
-router.delete("/:id", authorize("super_admin"), deleteClaim);
+// DELETE /api/v1/claims/:id         — hard delete (super_admin & admin only)
+router.delete("/:id", authorize("super_admin", "admin"), deleteClaim);
 
 module.exports = router;

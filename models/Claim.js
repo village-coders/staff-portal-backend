@@ -116,15 +116,18 @@ const claimSchema = new Schema(
         status: {
             type: String,
             enum: [
+                "SUBMITTED",
                 "NEW",
                 "PENDING",
                 "VERIFIED",
                 "FURTHER_APPROVAL",
+                "FURTHER_APPROVAL_APPROVED",
+                "FURTHER_APPROVAL_REJECTED",
                 "APPROVED_FOR_PAYMENT",
                 "PAID",
                 "REJECTED",
             ],
-            default: "NEW",
+            default: "SUBMITTED",
         },
         officerNote: {
             type: String,
