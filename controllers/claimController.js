@@ -608,6 +608,84 @@ const deleteClaim = async (req, res, next) => {
     }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Controller: Claims Summary (Dashboard stats)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/claims/summary
+ * Returns fast count aggregation per status for dashboard cards + sidebar badges.
+ * Handles both UPPERCASE (migrated legacy) and lowercase status values.
+ */
+const getClaimsSummary = async (req, res, next) => {
+    try {
+        const role = (req.user.role || "user").toLowerCase();
+
+        // Build scope filter same as getClaims
+        let scopeFilter = {};
+        if (role === "user") {
+            scopeFilter = { claimantId: req.user._id };
+        } else if (role === "financial_officer") {
+            scopeFilter = {
+                $or: [
+                    { claimantId: req.user._id },
+                    { status: { $in: ["SUBMITTED","submitted","NEW","new","PENDING","pending","REJECTED","rejected","VERIFIED","verified"] } },
+                ],
+            };
+        } else if (role === "ceo") {
+            scopeFilter = {
+                $or: [
+                    { claimantId: req.user._id },
+                    { status: { $in: ["VERIFIED","verified","FURTHER_APPROVAL","further_approval","FURTHER_APPROVAL_APPROVED","further_approval_approved","FURTHER_APPROVAL_REJECTED","further_approval_rejected","APPROVED_FOR_PAYMENT","approved_for_payment","PAID","paid"] } },
+                ],
+            };
+        } else if (role === "chairman") {
+            scopeFilter = {
+                $or: [
+                    { claimantId: req.user._id },
+                    { status: { $in: ["FURTHER_APPROVAL","further_approval","FURTHER_APPROVAL_APPROVED","further_approval_approved","FURTHER_APPROVAL_REJECTED","further_approval_rejected"] } },
+                ],
+            };
+        } else if (role === "accountant") {
+            scopeFilter = {
+                $or: [
+                    { claimantId: req.user._id },
+                    { status: { $in: ["APPROVED_FOR_PAYMENT","approved_for_payment","PAID","paid"] } },
+                ],
+            };
+        }
+        // admin/super_admin: no filter — all claims
+
+        const agg = await Claim.aggregate([
+            { $match: scopeFilter },
+            { $group: { _id: { $toUpper: "$status" }, count: { $sum: 1 } } },
+        ]);
+
+        const counts = {};
+        let total = 0;
+        agg.forEach(({ _id, count }) => {
+            counts[_id] = count;
+            total += count;
+        });
+
+        res.status(200).json({
+            success: true,
+            totalClaims: total,
+            submitted:             (counts["SUBMITTED"] || 0) + (counts["NEW"] || 0),
+            pending:               counts["PENDING"] || 0,
+            verified:              counts["VERIFIED"] || 0,
+            further_approval:      counts["FURTHER_APPROVAL"] || 0,
+            further_approval_approved: counts["FURTHER_APPROVAL_APPROVED"] || 0,
+            further_approval_rejected: counts["FURTHER_APPROVAL_REJECTED"] || 0,
+            approved_for_payment:  counts["APPROVED_FOR_PAYMENT"] || 0,
+            paid:                  counts["PAID"] || 0,
+            rejected:              counts["REJECTED"] || 0,
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     submitClaim,
     getClaims,
@@ -616,4 +694,5 @@ module.exports = {
     resubmitClaim,
     uploadClaimAttachments,
     deleteClaim,
+    getClaimsSummary,
 };

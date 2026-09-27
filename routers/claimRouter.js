@@ -7,6 +7,7 @@ const {
     resubmitClaim,
     uploadClaimAttachments,
     deleteClaim,
+    getClaimsSummary,
 } = require("../controllers/claimController");
 const { protect, authorize } = require("../middlewares/authMiddlewares");
 const upload = require("../middlewares/upload");
@@ -21,6 +22,9 @@ router.post("/", authorize("user", "admin", "super_admin"), submitClaim);
 
 // GET  /api/v1/claims               — list claims (role-filtered)
 router.get("/", getClaims);
+
+// GET  /api/v1/claims/summary        — fast status count aggregation (dashboard)
+router.get("/summary", getClaimsSummary);
 
 // GET  /api/v1/claims/:id           — get claim by ObjectId or claimRefNo
 router.get("/:id", getClaimById);
