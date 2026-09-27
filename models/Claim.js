@@ -138,5 +138,12 @@ const claimSchema = new Schema(
     { timestamps: true }
 );
 
+// Compound & field indexes for query speed, pagination, and status filtering
+claimSchema.index({ status: 1, createdAt: -1 });
+claimSchema.index({ claimantId: 1, createdAt: -1 });
+claimSchema.index({ createdAt: -1 });
+claimSchema.index({ filingDate: -1 });
+claimSchema.index({ claimantName: "text", claimRefNo: "text", claimType: "text", department: "text" });
+
 const Claim = model("Claim", claimSchema);
 module.exports = Claim;
