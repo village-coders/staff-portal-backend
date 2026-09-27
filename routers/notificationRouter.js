@@ -19,7 +19,8 @@ router.get("/", getNotifications);
 router.patch("/mark-read", markAllRead);
 router.patch("/read-all", markAllRead);
 
-// PATCH /api/v1/notifications/:id/mark-read — mark a single notification as read
+// PATCH /api/v1/notifications/:id/mark-read or /:id/read — mark a single notification as read
 router.patch("/:id/mark-read", markOneRead);
+router.patch("/:id/read", markOneRead);
 
 module.exports = router;

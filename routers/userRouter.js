@@ -9,11 +9,14 @@ const { protect, authorize } = require("../middlewares/authMiddlewares");
 
 const router = express.Router();
 
-// All user management routes require auth + super_admin role
-router.use(protect, authorize("super_admin"));
+// All user routes require authentication
+router.use(protect);
 
-// GET  /api/v1/users          — list all users (paginated)
+// GET  /api/v1/users          — list all users (authenticated staff members)
 router.get("/", getUsers);
+
+// Mutations require super_admin role
+router.use(authorize("super_admin"));
 
 // POST /api/v1/users          — create a new user
 router.post("/", createUser);
