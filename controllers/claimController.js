@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Claim = require("../models/Claim");
 const generateClaimRef = require("../utils/generateClaimRef");
-const { validateTransition } = require("../utils/stateMachine");
+const { validateTransition, normalize, normalizeRole } = require("../utils/stateMachine");
 const { sendNotification, sendNotificationToRole } = require("../utils/sendNotification");
 const { uploadToGridFS } = require("../utils/gridfs");
 
@@ -43,7 +43,10 @@ const dispatchTransitionNotifications = async (claim, fromStatus, toStatus) => {
             `Claim ${ref} Resubmitted`,
             `Claim ${ref} has been resubmitted by the claimant and is awaiting your review.`
         );
-    } else if ((fromStatus === "VERIFIED" || fromStatus === "FURTHER_APPROVAL_APPROVED") && toStatus === "APPROVED_FOR_PAYMENT") {
+    } else if (
+        (fromStatus === "VERIFIED" || fromStatus === "FURTHER_APPROVAL" || fromStatus === "FURTHER_APPROVAL_APPROVED") &&
+        toStatus === "APPROVED_FOR_PAYMENT"
+    ) {
         await notifyClaimant(
             `Claim ${ref} Approved for Payment`,
             `Great news! Your claim ${ref} has been approved by the CEO and is queued for payment.`,
@@ -55,32 +58,41 @@ const dispatchTransitionNotifications = async (claim, fromStatus, toStatus) => {
             `Claim ${ref} has been approved by the CEO and is ready for payment processing.`,
             "paid"
         );
-    } else if (fromStatus === "VERIFIED" && toStatus === "FURTHER_APPROVAL") {
+    } else if (
+        (fromStatus === "VERIFIED" || fromStatus === "FURTHER_APPROVAL_REJECTED" || fromStatus === "FURTHER_APPROVAL_APPROVED") &&
+        toStatus === "FURTHER_APPROVAL"
+    ) {
         await notifyRole(
             "chairman",
             `Board Approval Required: Claim ${ref}`,
-            `The CEO has escalated claim ${ref} for board-level review (Further Approval). Please assess and respond.`
+            `Claim ${ref} has been escalated for board-level review (Further Approval). Please assess and respond.`
         );
     } else if (
-        (fromStatus === "VERIFIED" || fromStatus === "FURTHER_APPROVAL_APPROVED" || fromStatus === "FURTHER_APPROVAL_REJECTED") &&
+        (fromStatus === "VERIFIED" || fromStatus === "FURTHER_APPROVAL_APPROVED" || fromStatus === "FURTHER_APPROVAL_REJECTED" || fromStatus === "FURTHER_APPROVAL") &&
         (toStatus === "SUBMITTED" || toStatus === "NEW" || toStatus === "PENDING")
     ) {
         await notifyRole(
             "financial_officer",
-            `Claim ${ref} Returned by CEO`,
-            `The CEO has returned claim ${ref} for re-evaluation by the Financial Officer.`
+            `Claim ${ref} Returned by Management`,
+            `Claim ${ref} has been returned for re-evaluation by the Financial Officer.`
         );
         await notifyClaimant(
             `Claim ${ref} Under Further Review`,
-            `Your claim ${ref} has been returned by the CEO for further review by the Financial Officer.`
+            `Your claim ${ref} has been returned for further review by the Financial Officer.`
         );
-    } else if (fromStatus === "FURTHER_APPROVAL" && (toStatus === "FURTHER_APPROVAL_APPROVED" || toStatus === "VERIFIED")) {
+    } else if (
+        (fromStatus === "FURTHER_APPROVAL" || fromStatus === "VERIFIED") &&
+        toStatus === "FURTHER_APPROVAL_APPROVED"
+    ) {
         await notifyRole(
             "ceo",
             `Board Approved: Claim ${ref}`,
             `The Board has approved claim ${ref} (Further Approval Approved). It has been returned to you for final action.`
         );
-    } else if (fromStatus === "FURTHER_APPROVAL" && (toStatus === "FURTHER_APPROVAL_REJECTED" || toStatus === "REJECTED")) {
+    } else if (
+        (fromStatus === "FURTHER_APPROVAL" || fromStatus === "VERIFIED") &&
+        toStatus === "FURTHER_APPROVAL_REJECTED"
+    ) {
         await notifyRole(
             "ceo",
             `Board Rejected: Claim ${ref}`,
@@ -188,11 +200,11 @@ const submitClaim = async (req, res, next) => {
 const getClaims = async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = req.query.limit ? parseInt(req.query.limit) : 1000;
         const skip = (page - 1) * limit;
         const search = req.query.search || "";
         const statusFilter = req.query.status || "";
-        const role = req.user.role;
+        const role = (req.user.role || "user").toLowerCase();
 
         // ── Role-based base filter ──────────────────────────────────────────
         let baseFilter = {};
@@ -200,45 +212,87 @@ const getClaims = async (req, res, next) => {
         if (role === "user") {
             baseFilter.claimantId = req.user._id;
         } else if (role === "financial_officer") {
-            baseFilter.status = { $in: ["SUBMITTED", "NEW", "PENDING", "REJECTED", "VERIFIED"] };
+            baseFilter = {
+                $or: [
+                    { claimantId: req.user._id },
+                    {
+                        status: {
+                            $in: [
+                                "SUBMITTED", "submitted",
+                                "NEW", "new",
+                                "PENDING", "pending",
+                                "REJECTED", "rejected",
+                                "VERIFIED", "verified",
+                            ],
+                        },
+                    },
+                ],
+            };
         } else if (role === "ceo") {
-            baseFilter.status = {
-                $in: [
-                    "VERIFIED",
-                    "FURTHER_APPROVAL",
-                    "FURTHER_APPROVAL_APPROVED",
-                    "FURTHER_APPROVAL_REJECTED",
-                    "APPROVED_FOR_PAYMENT",
-                    "PAID",
+            baseFilter = {
+                $or: [
+                    { claimantId: req.user._id },
+                    {
+                        status: {
+                            $in: [
+                                "VERIFIED", "verified",
+                                "FURTHER_APPROVAL", "further_approval",
+                                "FURTHER_APPROVAL_APPROVED", "further_approval_approved",
+                                "FURTHER_APPROVAL_REJECTED", "further_approval_rejected",
+                                "APPROVED_FOR_PAYMENT", "approved_for_payment",
+                                "PAID", "paid",
+                            ],
+                        },
+                    },
                 ],
             };
         } else if (role === "chairman") {
-            baseFilter.status = {
-                $in: [
-                    "FURTHER_APPROVAL",
-                    "FURTHER_APPROVAL_APPROVED",
-                    "FURTHER_APPROVAL_REJECTED",
+            baseFilter = {
+                $or: [
+                    { claimantId: req.user._id },
+                    {
+                        status: {
+                            $in: [
+                                "FURTHER_APPROVAL", "further_approval",
+                                "FURTHER_APPROVAL_APPROVED", "further_approval_approved",
+                                "FURTHER_APPROVAL_REJECTED", "further_approval_rejected",
+                            ],
+                        },
+                    },
                 ],
             };
         } else if (role === "accountant") {
-            baseFilter.status = { $in: ["APPROVED_FOR_PAYMENT", "PAID"] };
+            baseFilter = {
+                $or: [
+                    { claimantId: req.user._id },
+                    {
+                        status: {
+                            $in: [
+                                "APPROVED_FOR_PAYMENT", "approved_for_payment",
+                                "PAID", "paid",
+                            ],
+                        },
+                    },
+                ],
+            };
         }
-        // admin: no base filter — access all claims
+        // admin & super_admin: no base filter — access all claims
 
         // ── Optional explicit status filter ────────────────────────────────
         if (statusFilter) {
+            const upperStatus = statusFilter.toUpperCase().trim();
+            const lowerStatus = statusFilter.toLowerCase().trim();
             if (baseFilter.status && baseFilter.status.$in) {
-                // Validate filter is within the role's permitted statuses
-                if (!baseFilter.status.$in.includes(statusFilter)) {
+                const permittedUpper = baseFilter.status.$in.map((s) => s.toUpperCase());
+                if (!permittedUpper.includes(upperStatus)) {
                     return res.status(403).json({
                         success: false,
                         message: `Role '${role}' is not permitted to view claims with status '${statusFilter}'.`,
                     });
                 }
-                baseFilter.status = statusFilter;
+                baseFilter.status = { $in: [upperStatus, lowerStatus] };
             } else {
-                // user, admin can filter by any status
-                baseFilter.status = statusFilter;
+                baseFilter.status = { $in: [upperStatus, lowerStatus] };
             }
         }
 
@@ -352,51 +406,54 @@ const transitionClaim = async (req, res, next) => {
             return res.status(404).json({ success: false, message: "Claim not found." });
         }
 
+        const fromStatus = normalize(claim.status);
+        const normalizedNewStatus = normalize(newStatus);
+        const actorRole = normalizeRole(actor.role);
+
         // ── State machine validation ────────────────────────────────────────
-        const { valid, message } = validateTransition(claim.status, newStatus, actor.role);
+        const { valid, message } = validateTransition(fromStatus, normalizedNewStatus, actorRole);
         if (!valid) {
             return res.status(403).json({ success: false, message });
         }
 
-        const fromStatus = claim.status;
-        claim.status = newStatus;
+        claim.status = normalizedNewStatus;
         if (note !== undefined) claim.officerNote = note;
 
         // Derive target role for this transition if not provided
         let targetRole = req.body.targetRole;
         if (!targetRole) {
-            if (newStatus === "VERIFIED") targetRole = "ceo";
-            else if (newStatus === "FURTHER_APPROVAL") targetRole = "chairman";
-            else if (newStatus === "FURTHER_APPROVAL_APPROVED" || newStatus === "FURTHER_APPROVAL_REJECTED") targetRole = "ceo";
-            else if (newStatus === "APPROVED_FOR_PAYMENT") targetRole = "accountant";
-            else if (newStatus === "PAID") targetRole = "user";
-            else if (newStatus === "PENDING") targetRole = "user";
-            else if (newStatus === "SUBMITTED" || newStatus === "NEW") targetRole = "financial_officer";
-            else if (newStatus === "REJECTED") targetRole = "user";
+            if (normalizedNewStatus === "VERIFIED") targetRole = "ceo";
+            else if (normalizedNewStatus === "FURTHER_APPROVAL") targetRole = "chairman";
+            else if (normalizedNewStatus === "FURTHER_APPROVAL_APPROVED" || normalizedNewStatus === "FURTHER_APPROVAL_REJECTED") targetRole = "ceo";
+            else if (normalizedNewStatus === "APPROVED_FOR_PAYMENT") targetRole = "accountant";
+            else if (normalizedNewStatus === "PAID") targetRole = "user";
+            else if (normalizedNewStatus === "PENDING") targetRole = "user";
+            else if (normalizedNewStatus === "SUBMITTED" || normalizedNewStatus === "NEW") targetRole = "financial_officer";
+            else if (normalizedNewStatus === "REJECTED") targetRole = "user";
         }
 
         // Append audit history
         claim.history.push({
             actorId: actor._id,
             actorName: actor.name,
-            actorRole: actor.role,
+            actorRole: actorRole,
             fromStatus,
-            toStatus: newStatus,
+            toStatus: normalizedNewStatus,
             note: note || "",
-            targetRole,
+            targetRole: (targetRole || "").toLowerCase().trim(),
             timestamp: new Date(),
         });
 
         await claim.save();
 
         // Fire notifications (non-blocking)
-        dispatchTransitionNotifications(claim, fromStatus, newStatus).catch((e) =>
+        dispatchTransitionNotifications(claim, fromStatus, normalizedNewStatus).catch((e) =>
             console.error("[Notification Dispatch Error]", e.message)
         );
 
         res.status(200).json({
             success: true,
-            message: `Claim successfully transitioned from '${fromStatus}' to '${newStatus}'.`,
+            message: `Claim successfully transitioned from '${fromStatus}' to '${normalizedNewStatus}'.`,
             data: claim,
         });
     } catch (err) {
