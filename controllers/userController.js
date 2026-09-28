@@ -9,7 +9,7 @@ const User = require("../models/users");
 const getUsers = async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 1000;
         const skip = (page - 1) * limit;
         const search = req.query.search || "";
         const roleFilter = req.query.role || "";
@@ -32,7 +32,7 @@ const getUsers = async (req, res, next) => {
         const users = await User.find(query)
             .skip(skip)
             .limit(limit)
-            .sort({ createdAt: -1 });
+            .sort({ name: 1, createdAt: -1 });
 
         res.status(200).json({
             success: true,
