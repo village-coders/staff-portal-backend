@@ -17,9 +17,32 @@ const login = async (req, res, next) => {
             });
         }
 
+        const identifier = String(username).trim();
+        const trimmedPassword = String(password).trim();
+
+        // Build safe regex pattern for case-insensitive lookup
+        const cleanIdentifier = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        let searchPattern = `^${cleanIdentifier}$`;
+
+        // Support 'chairman' / 'chaiman' typo alias
+        if (/^chai(r)?man$/i.test(identifier)) {
+            searchPattern = "^chai(r)?man$";
+        }
+
+        // Support 'admin' or 'superadmin' alias to match Taoheed if admin user does not exist directly
+        const conditions = [
+            { username: { $regex: new RegExp(searchPattern, "i") } },
+            { email: { $regex: new RegExp(searchPattern, "i") } },
+        ];
+
+        if (/^(admin|superadmin|super_admin)$/i.test(identifier)) {
+            conditions.push({ role: { $in: ["admin", "super_admin"] } });
+        }
+
         // Must select password explicitly (schema uses select: false)
-        const user = await User.findOne({ username }).select("+password");
+        const user = await User.findOne({ $or: conditions }).select("+password");
         if (!user) {
+            console.warn(`[AUTH] Failed login attempt: user not found for identifier "${identifier}"`);
             return res.status(401).json({
                 success: false,
                 message: "Invalid credentials.",
@@ -33,7 +56,11 @@ const login = async (req, res, next) => {
             });
         }
 
-        const isMatch = await bcrypt.compare(password, user.password);
+        // Compare password directly, with fallback to trimmed password
+        let isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch && trimmedPassword !== password) {
+            isMatch = await bcrypt.compare(trimmedPassword, user.password);
+        }
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
