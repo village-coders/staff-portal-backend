@@ -32,7 +32,8 @@ echo "=== 1. Navigating to repository ==="
 cd /home/administrator/staff-portal-backend
 
 echo "=== 2. Cleaning working tree ==="
-git restore . || git checkout -- .
+git reset --hard HEAD
+git clean -fd
 
 echo "=== 3. Pulling origin main ==="
 git pull origin main
