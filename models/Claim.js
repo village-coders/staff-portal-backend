@@ -19,8 +19,12 @@ const historyEntrySchema = new Schema(
 const attachmentSchema = new Schema(
     {
         fileName: { type: String },
-        fileUrl: { type: String }, // GridFS ObjectId stored as string
-        fileSize: { type: String },
+        fileUrl: { type: String, default: "" }, // GridFS ObjectId stored as string or URL
+        fileSize: { type: String, default: "Attached Document" },
+        date: { type: String },
+        docDate: { type: String },
+        uploadDate: { type: String },
+        note: { type: String, default: "" },
         uploadedAt: { type: Date, default: Date.now },
     },
     { _id: false }
@@ -133,12 +137,39 @@ const claimSchema = new Schema(
             type: String,
             default: "",
         },
+        note: {
+            type: String,
+            default: "",
+        },
+        notes: {
+            type: String,
+            default: "",
+        },
         history: [historyEntrySchema],
+        isDeleted: {
+            type: Boolean,
+            default: false,
+            index: true,
+        },
+        deletedAt: {
+            type: Date,
+            default: null,
+        },
+        deletedBy: {
+            type: String,
+            default: null,
+        },
+        previousStatus: {
+            type: String,
+            default: null,
+        },
     },
     { timestamps: true }
 );
 
 // Compound & field indexes for query speed, pagination, and status filtering
+claimSchema.index({ isDeleted: 1, createdAt: -1 });
+claimSchema.index({ isDeleted: 1, status: 1, createdAt: -1 });
 claimSchema.index({ status: 1, createdAt: -1 });
 claimSchema.index({ claimantId: 1, createdAt: -1 });
 claimSchema.index({ createdAt: -1 });

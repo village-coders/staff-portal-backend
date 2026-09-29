@@ -132,6 +132,10 @@ const submitClaim = async (req, res, next) => {
             items,
             subtotals,
             department,
+            attachments,
+            note,
+            notes,
+            officerNote,
         } = req.body;
 
         if (!claimType || !filingDate || !items || !subtotals) {
@@ -142,6 +146,7 @@ const submitClaim = async (req, res, next) => {
         }
 
         const claimRefNo = await generateClaimRef();
+        const initialNote = note || notes || officerNote || "";
 
         const claim = await Claim.create({
             claimRefNo,
@@ -156,6 +161,10 @@ const submitClaim = async (req, res, next) => {
             reasons: reasons || [],
             items,
             subtotals,
+            attachments: attachments || [],
+            note: initialNote,
+            notes: initialNote,
+            officerNote: officerNote || initialNote,
             status: "SUBMITTED",
             history: [
                 {
@@ -164,7 +173,7 @@ const submitClaim = async (req, res, next) => {
                     actorRole: req.user.role,
                     fromStatus: null,
                     toStatus: "SUBMITTED",
-                    note: "Claim submitted.",
+                    note: initialNote || "Claim submitted.",
                     timestamp: new Date(),
                 },
             ],
@@ -206,14 +215,26 @@ const getClaims = async (req, res, next) => {
         const statusFilter = req.query.status || "";
         const role = (req.user.role || "user").toLowerCase();
 
+        const isDeletedQuery = req.query.deleted === "true" || req.query.isDeleted === "true";
+
         // ── Role-based base filter ──────────────────────────────────────────
         let baseFilter = {};
 
-        if (role === "user") {
-            baseFilter.claimantId = req.user._id;
-        } else if (role === "financial_officer") {
-            baseFilter = {
-                $or: [
+        if (isDeletedQuery) {
+            if (role !== "super_admin") {
+                return res.status(403).json({
+                    success: false,
+                    message: "Only Super Admin can access deleted claims.",
+                });
+            }
+            baseFilter = { isDeleted: true };
+        } else {
+            baseFilter.isDeleted = { $ne: true };
+
+            if (role === "user") {
+                baseFilter.claimantId = req.user._id;
+            } else if (role === "financial_officer") {
+                baseFilter.$or = [
                     { claimantId: req.user._id },
                     {
                         status: {
@@ -226,11 +247,9 @@ const getClaims = async (req, res, next) => {
                             ],
                         },
                     },
-                ],
-            };
-        } else if (role === "ceo") {
-            baseFilter = {
-                $or: [
+                ];
+            } else if (role === "ceo") {
+                baseFilter.$or = [
                     { claimantId: req.user._id },
                     {
                         status: {
@@ -244,11 +263,9 @@ const getClaims = async (req, res, next) => {
                             ],
                         },
                     },
-                ],
-            };
-        } else if (role === "chairman") {
-            baseFilter = {
-                $or: [
+                ];
+            } else if (role === "chairman") {
+                baseFilter.$or = [
                     { claimantId: req.user._id },
                     {
                         status: {
@@ -259,11 +276,9 @@ const getClaims = async (req, res, next) => {
                             ],
                         },
                     },
-                ],
-            };
-        } else if (role === "accountant") {
-            baseFilter = {
-                $or: [
+                ];
+            } else if (role === "accountant") {
+                baseFilter.$or = [
                     { claimantId: req.user._id },
                     {
                         status: {
@@ -273,10 +288,10 @@ const getClaims = async (req, res, next) => {
                             ],
                         },
                     },
-                ],
-            };
+                ];
+            }
+            // admin & super_admin: access all active claims
         }
-        // admin & super_admin: no base filter — access all claims
 
         // ── Optional explicit status filter ────────────────────────────────
         if (statusFilter) {
@@ -589,20 +604,102 @@ const uploadClaimAttachments = async (req, res, next) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Controller: Hard delete (Admin only)
+// Controller: Soft delete (Super Admin only)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * DELETE /api/v1/claims/:id
- * Permanently removes a claim from the database (Admin only).
+ * Moves a claim to trash (Super Admin only).
  */
 const deleteClaim = async (req, res, next) => {
     try {
-        const claim = await Claim.findByIdAndDelete(req.params.id);
+        const role = (req.user.role || "").toLowerCase();
+        if (role !== "super_admin") {
+            return res.status(403).json({ success: false, message: "Only Super Admin can delete claims." });
+        }
+
+        const { id } = req.params;
+        const queryConditions = [{ claimRefNo: id }];
+        if (mongoose.isValidObjectId(id)) {
+            queryConditions.push({ _id: id });
+        }
+
+        const claim = await Claim.findOne({ $or: queryConditions });
         if (!claim) {
             return res.status(404).json({ success: false, message: "Claim not found." });
         }
-        res.status(200).json({ success: true, message: "Claim permanently deleted." });
+
+        claim.isDeleted = true;
+        claim.deletedAt = new Date();
+        claim.deletedBy = req.user.name || req.user.username || "Super Admin";
+        claim.previousStatus = claim.status;
+        await claim.save();
+
+        res.status(200).json({ success: true, message: `Claim ${claim.claimRefNo} moved to trash.`, data: claim });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * POST /api/v1/claims/:id/restore
+ * Restores a soft-deleted claim (Super Admin only).
+ */
+const restoreClaim = async (req, res, next) => {
+    try {
+        const role = (req.user.role || "").toLowerCase();
+        if (role !== "super_admin") {
+            return res.status(403).json({ success: false, message: "Only Super Admin can restore claims." });
+        }
+
+        const { id } = req.params;
+        const queryConditions = [{ claimRefNo: id }];
+        if (mongoose.isValidObjectId(id)) {
+            queryConditions.push({ _id: id });
+        }
+
+        const claim = await Claim.findOne({ $or: queryConditions });
+        if (!claim) {
+            return res.status(404).json({ success: false, message: "Claim not found." });
+        }
+
+        claim.isDeleted = false;
+        claim.deletedAt = null;
+        claim.deletedBy = null;
+        if (claim.previousStatus) {
+            claim.status = claim.previousStatus;
+        }
+        await claim.save();
+
+        res.status(200).json({ success: true, message: `Claim ${claim.claimRefNo} restored successfully.`, data: claim });
+    } catch (err) {
+        next(err);
+    }
+};
+
+/**
+ * DELETE /api/v1/claims/:id/purge
+ * Permanently deletes a claim from database (Super Admin only).
+ */
+const purgeClaim = async (req, res, next) => {
+    try {
+        const role = (req.user.role || "").toLowerCase();
+        if (role !== "super_admin") {
+            return res.status(403).json({ success: false, message: "Only Super Admin can permanently delete claims." });
+        }
+
+        const { id } = req.params;
+        const queryConditions = [{ claimRefNo: id }];
+        if (mongoose.isValidObjectId(id)) {
+            queryConditions.push({ _id: id });
+        }
+
+        const claim = await Claim.findOneAndDelete({ $or: queryConditions });
+        if (!claim) {
+            return res.status(404).json({ success: false, message: "Claim not found." });
+        }
+
+        res.status(200).json({ success: true, message: `Claim ${claim.claimRefNo} permanently deleted.` });
     } catch (err) {
         next(err);
     }
@@ -622,39 +719,31 @@ const getClaimsSummary = async (req, res, next) => {
         const role = (req.user.role || "user").toLowerCase();
 
         // Build scope filter same as getClaims
-        let scopeFilter = {};
+        let scopeFilter = { isDeleted: { $ne: true } };
         if (role === "user") {
-            scopeFilter = { claimantId: req.user._id };
+            scopeFilter.claimantId = req.user._id;
         } else if (role === "financial_officer") {
-            scopeFilter = {
-                $or: [
-                    { claimantId: req.user._id },
-                    { status: { $in: ["SUBMITTED","submitted","NEW","new","PENDING","pending","REJECTED","rejected","VERIFIED","verified"] } },
-                ],
-            };
+            scopeFilter.$or = [
+                { claimantId: req.user._id },
+                { status: { $in: ["SUBMITTED","submitted","NEW","new","PENDING","pending","REJECTED","rejected","VERIFIED","verified"] } },
+            ];
         } else if (role === "ceo") {
-            scopeFilter = {
-                $or: [
-                    { claimantId: req.user._id },
-                    { status: { $in: ["VERIFIED","verified","FURTHER_APPROVAL","further_approval","FURTHER_APPROVAL_APPROVED","further_approval_approved","FURTHER_APPROVAL_REJECTED","further_approval_rejected","APPROVED_FOR_PAYMENT","approved_for_payment","PAID","paid"] } },
-                ],
-            };
+            scopeFilter.$or = [
+                { claimantId: req.user._id },
+                { status: { $in: ["VERIFIED","verified","FURTHER_APPROVAL","further_approval","FURTHER_APPROVAL_APPROVED","further_approval_approved","FURTHER_APPROVAL_REJECTED","further_approval_rejected","APPROVED_FOR_PAYMENT","approved_for_payment","PAID","paid"] } },
+            ];
         } else if (role === "chairman") {
-            scopeFilter = {
-                $or: [
-                    { claimantId: req.user._id },
-                    { status: { $in: ["FURTHER_APPROVAL","further_approval","FURTHER_APPROVAL_APPROVED","further_approval_approved","FURTHER_APPROVAL_REJECTED","further_approval_rejected"] } },
-                ],
-            };
+            scopeFilter.$or = [
+                { claimantId: req.user._id },
+                { status: { $in: ["FURTHER_APPROVAL","further_approval","FURTHER_APPROVAL_APPROVED","further_approval_approved","FURTHER_APPROVAL_REJECTED","further_approval_rejected"] } },
+            ];
         } else if (role === "accountant") {
-            scopeFilter = {
-                $or: [
-                    { claimantId: req.user._id },
-                    { status: { $in: ["APPROVED_FOR_PAYMENT","approved_for_payment","PAID","paid"] } },
-                ],
-            };
+            scopeFilter.$or = [
+                { claimantId: req.user._id },
+                { status: { $in: ["APPROVED_FOR_PAYMENT","approved_for_payment","PAID","paid"] } },
+            ];
         }
-        // admin/super_admin: no filter — all claims
+        // admin/super_admin: scopeFilter has isDeleted: { $ne: true }
 
         const agg = await Claim.aggregate([
             { $match: scopeFilter },
@@ -694,5 +783,7 @@ module.exports = {
     resubmitClaim,
     uploadClaimAttachments,
     deleteClaim,
+    restoreClaim,
+    purgeClaim,
     getClaimsSummary,
 };
