@@ -325,12 +325,23 @@ const getClaims = async (req, res, next) => {
 
         const query = { ...baseFilter, ...searchFilter };
 
-        const total = await Claim.countDocuments(query);
-        const claims = await Claim.find(query)
-            .populate("claimantId", "name email username department")
+        const isFull = req.query.full === "true";
+        const claimsFind = Claim.find(query)
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(limit);
+            .limit(limit)
+            .lean();
+
+        if (!isFull) {
+            claimsFind.select("-items -attachments -history");
+        } else {
+            claimsFind.populate("claimantId", "name email username department");
+        }
+
+        const [total, claims] = await Promise.all([
+            Claim.countDocuments(query),
+            claimsFind,
+        ]);
 
         res.status(200).json({
             success: true,
