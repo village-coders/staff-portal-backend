@@ -19,8 +19,8 @@ const router = express.Router();
 // All claim routes require authentication
 router.use(protect);
 
-// POST /api/v1/claims               — submit a new claim (users/admins)
-router.post("/", authorize("user", "admin", "super_admin"), submitClaim);
+// POST /api/v1/claims               — submit a new claim (all authenticated staff)
+router.post("/", submitClaim);
 
 // GET  /api/v1/claims               — list claims (role-filtered, supports ?deleted=true for super_admin)
 router.get("/", getClaims);
@@ -35,8 +35,8 @@ router.get("/:id", getClaimById);
 // Body: { newStatus: string, note?: string }
 router.patch("/:id/transition", transitionClaim);
 
-// PUT /api/v1/claims/:id/resubmit   — resubmit PENDING claim
-router.put("/:id/resubmit", authorize("user", "admin", "super_admin"), resubmitClaim);
+// PUT /api/v1/claims/:id/resubmit   — resubmit PENDING claim (claimant)
+router.put("/:id/resubmit", resubmitClaim);
 
 // POST /api/v1/claims/:id/attachments — upload files via GridFS (field: "files")
 router.post("/:id/attachments", upload.array("files", 10), uploadClaimAttachments);
