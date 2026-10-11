@@ -26,10 +26,11 @@ const dispatchTransitionNotifications = async (claim, fromStatus, toStatus) => {
             `Your claim ${ref} has been verified by the Financial Officer and forwarded to the CEO.`,
             "verified"
         );
-    } else if ((fromStatus === "SUBMITTED" || fromStatus === "NEW") && toStatus === "PENDING") {
+    } else if ((fromStatus === "SUBMITTED" || fromStatus === "NEW" || fromStatus === "VERIFIED") && toStatus === "PENDING") {
+        const reasonText = claim.officerNote ? ` Reason: "${claim.officerNote}"` : "";
         await notifyClaimant(
-            `Action Required: Claim ${ref}`,
-            `The Financial Officer has sent feedback on your claim ${ref}. Please review the note and resubmit.`,
+            `Action Required: Claim ${ref} Needs Correction`,
+            `Your claim ${ref} has been sent to Pending for corrections.${reasonText} Please edit the claim and resubmit.`,
             "pending"
         );
     } else if ((fromStatus === "SUBMITTED" || fromStatus === "NEW") && toStatus === "REJECTED") {
@@ -442,8 +443,20 @@ const transitionClaim = async (req, res, next) => {
             return res.status(403).json({ success: false, message });
         }
 
+        // When sending to PENDING, a reason/feedback note is strictly required
+        if (normalizedNewStatus === "PENDING" && (!note || !note.trim())) {
+            return res.status(400).json({
+                success: false,
+                message: "A note or reason explaining why the claim is being sent to pending is required.",
+            });
+        }
+
         claim.status = normalizedNewStatus;
-        if (note !== undefined) claim.officerNote = note;
+        if (note !== undefined) {
+            claim.officerNote = note.trim();
+            claim.note = note.trim();
+            claim.notes = note.trim();
+        }
 
         // Derive target role for this transition if not provided
         let targetRole = req.body.targetRole;
@@ -498,7 +511,20 @@ const transitionClaim = async (req, res, next) => {
 const resubmitClaim = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { note } = req.body;
+        const {
+            note,
+            notes,
+            claimType,
+            filingDate,
+            companyName,
+            contactPerson,
+            contactEmail,
+            reasons,
+            items,
+            subtotals,
+            department,
+            attachments,
+        } = req.body;
 
         const queryConditions = [{ claimRefNo: id }];
         if (mongoose.isValidObjectId(id)) queryConditions.push({ _id: id });
@@ -508,10 +534,12 @@ const resubmitClaim = async (req, res, next) => {
             return res.status(404).json({ success: false, message: "Claim not found." });
         }
 
-        if (claim.claimantId.toString() !== req.user._id.toString()) {
+        const isClaimant = claim.claimantId.toString() === req.user._id.toString();
+        const isAdmin = req.user.role === "admin" || req.user.role === "super_admin";
+        if (!isClaimant && !isAdmin) {
             return res.status(403).json({
                 success: false,
-                message: "Only the original claimant can resubmit this claim.",
+                message: "Only the original claimant or an administrator can resubmit this claim.",
             });
         }
 
@@ -522,6 +550,23 @@ const resubmitClaim = async (req, res, next) => {
             });
         }
 
+        // Apply edits to claim fields if provided
+        if (Array.isArray(items) && items.length > 0) claim.items = items;
+        if (subtotals && typeof subtotals === "object") claim.subtotals = subtotals;
+        if (Array.isArray(reasons)) claim.reasons = reasons;
+        if (claimType) claim.claimType = claimType;
+        if (filingDate) claim.filingDate = filingDate;
+        if (companyName) claim.companyName = companyName;
+        if (contactPerson !== undefined) claim.contactPerson = contactPerson;
+        if (contactEmail !== undefined) claim.contactEmail = contactEmail;
+        if (department) claim.department = department;
+        if (Array.isArray(attachments)) claim.attachments = attachments;
+
+        const resubmitNote = (note || notes || "Claim corrected and resubmitted.").trim();
+        claim.note = resubmitNote;
+        claim.notes = resubmitNote;
+        claim.officerNote = resubmitNote;
+
         claim.status = "SUBMITTED";
         claim.history.push({
             actorId: req.user._id,
@@ -529,7 +574,8 @@ const resubmitClaim = async (req, res, next) => {
             actorRole: req.user.role,
             fromStatus: "PENDING",
             toStatus: "SUBMITTED",
-            note: note || "Claim resubmitted after addressing feedback.",
+            note: resubmitNote,
+            targetRole: "financial_officer",
             timestamp: new Date(),
         });
 
@@ -539,14 +585,19 @@ const resubmitClaim = async (req, res, next) => {
             role: "financial_officer",
             type: "claim",
             title: `Claim ${claim.claimRefNo} Resubmitted`,
-            message: `${req.user.name} has resubmitted claim ${claim.claimRefNo} after addressing the feedback. Please re-review.`,
+            message: `${req.user.name} has corrected and resubmitted claim ${claim.claimRefNo} for verification.`,
             claimId: claim._id,
         });
+
+        const updatedClaim = await Claim.findById(claim._id).populate(
+            "claimantId",
+            "name email username department"
+        );
 
         res.status(200).json({
             success: true,
             message: "Claim resubmitted successfully.",
-            data: claim,
+            data: updatedClaim || claim,
         });
     } catch (err) {
         next(err);
