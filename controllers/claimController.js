@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Claim = require("../models/Claim");
+const User = require("../models/users");
 const generateClaimRef = require("../utils/generateClaimRef");
 const { validateTransition, normalize, normalizeRole } = require("../utils/stateMachine");
 const { sendNotification, sendNotificationToRole } = require("../utils/sendNotification");
@@ -126,6 +127,7 @@ const submitClaim = async (req, res, next) => {
         const {
             claimType,
             filingDate,
+            expenseDate,
             companyName,
             contactPerson,
             contactEmail,
@@ -149,13 +151,17 @@ const submitClaim = async (req, res, next) => {
         const claimRefNo = await generateClaimRef();
         const initialNote = note || notes || officerNote || "";
 
+        const isSuperAdmin = (req.user.role || "").toLowerCase() === "super_admin";
+        const finalFilingDate = (isSuperAdmin && filingDate) ? filingDate : new Date();
+
         const claim = await Claim.create({
             claimRefNo,
             claimantId: req.user._id,
             claimantName: req.user.name,
             department: department || req.user.department,
             claimType,
-            filingDate,
+            filingDate: finalFilingDate,
+            expenseDate: expenseDate || finalFilingDate,
             companyName,
             contactPerson,
             contactEmail,
@@ -313,16 +319,40 @@ const getClaims = async (req, res, next) => {
         }
 
         // ── Search filter ──────────────────────────────────────────────────
-        const searchFilter = search
-            ? {
-                  $or: [
-                      { claimRefNo: { $regex: search, $options: "i" } },
-                      { claimantName: { $regex: search, $options: "i" } },
-                      { claimType: { $regex: search, $options: "i" } },
-                      { department: { $regex: search, $options: "i" } },
-                  ],
-              }
-            : {};
+        let searchFilter = {};
+        if (search) {
+            const cleanSearch = search.trim();
+            const searchOr = [
+                { claimRefNo: { $regex: cleanSearch, $options: "i" } },
+                { claimantName: { $regex: cleanSearch, $options: "i" } },
+                { companyName: { $regex: cleanSearch, $options: "i" } },
+                { claimType: { $regex: cleanSearch, $options: "i" } },
+                { department: { $regex: cleanSearch, $options: "i" } },
+                { contactPerson: { $regex: cleanSearch, $options: "i" } },
+            ];
+
+            if (mongoose.isValidObjectId(cleanSearch)) {
+                searchOr.push({ claimantId: new mongoose.Types.ObjectId(cleanSearch) });
+            }
+
+            try {
+                const matchedUsers = await User.find({
+                    $or: [
+                        { username: { $regex: cleanSearch, $options: "i" } },
+                        { email: { $regex: cleanSearch, $options: "i" } },
+                        { name: { $regex: cleanSearch, $options: "i" } },
+                    ],
+                }).select("_id").lean();
+
+                if (matchedUsers.length > 0) {
+                    searchOr.push({ claimantId: { $in: matchedUsers.map((u) => u._id) } });
+                }
+            } catch (userSearchErr) {
+                // Non-critical, fallback to direct claim fields
+            }
+
+            searchFilter = { $or: searchOr };
+        }
 
         const query = { ...baseFilter, ...searchFilter };
 
@@ -452,6 +482,9 @@ const transitionClaim = async (req, res, next) => {
         }
 
         claim.status = normalizedNewStatus;
+        if (normalizedNewStatus === "PAID" && !claim.paidDate) {
+            claim.paidDate = new Date();
+        }
         if (note !== undefined) {
             claim.officerNote = note.trim();
             claim.note = note.trim();
@@ -555,7 +588,10 @@ const resubmitClaim = async (req, res, next) => {
         if (subtotals && typeof subtotals === "object") claim.subtotals = subtotals;
         if (Array.isArray(reasons)) claim.reasons = reasons;
         if (claimType) claim.claimType = claimType;
-        if (filingDate) claim.filingDate = filingDate;
+        if (filingDate && (req.user.role || "").toLowerCase() === "super_admin") {
+            claim.filingDate = filingDate;
+        }
+        if (req.body.expenseDate) claim.expenseDate = req.body.expenseDate;
         if (companyName) claim.companyName = companyName;
         if (contactPerson !== undefined) claim.contactPerson = contactPerson;
         if (contactEmail !== undefined) claim.contactEmail = contactEmail;

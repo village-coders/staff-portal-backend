@@ -107,6 +107,14 @@ const claimSchema = new Schema(
             type: Date,
             required: [true, "Filing date is required"],
         },
+        expenseDate: {
+            type: Date,
+            default: Date.now,
+        },
+        paidDate: {
+            type: Date,
+            default: null,
+        },
         companyName: {
             type: String,
             default: "Halal Food Authority",
@@ -174,7 +182,9 @@ claimSchema.index({ status: 1, createdAt: -1 });
 claimSchema.index({ claimantId: 1, createdAt: -1 });
 claimSchema.index({ createdAt: -1 });
 claimSchema.index({ filingDate: -1 });
-claimSchema.index({ claimantName: "text", claimRefNo: "text", claimType: "text", department: "text" });
+claimSchema.index({ expenseDate: -1 });
+claimSchema.index({ paidDate: -1 });
+claimSchema.index({ claimantName: "text", claimRefNo: "text", companyName: "text", claimType: "text", department: "text" });
 
 const Claim = model("Claim", claimSchema);
 module.exports = Claim;
