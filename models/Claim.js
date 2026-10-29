@@ -48,7 +48,7 @@ const itemSchema = new Schema(
         category: { type: String, required: [true, "Item category is required"] },
         currency: {
             type: String,
-            enum: ["GBP", "USD", "EUR"],
+            enum: ["GBP", "USD", "EUR", "SAR", "AED", "TRY"],
             default: "GBP",
         },
         payMode: {
@@ -125,6 +125,11 @@ const claimSchema = new Schema(
         items: [itemSchema],
         subtotals: subtotalsSchema,
         attachments: [attachmentSchema],
+        currency: {
+            type: String,
+            enum: ["GBP", "USD", "EUR", "SAR", "AED", "TRY"],
+            default: "GBP",
+        },
         status: {
             type: String,
             enum: [

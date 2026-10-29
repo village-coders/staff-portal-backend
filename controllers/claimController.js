@@ -136,6 +136,7 @@ const submitClaim = async (req, res, next) => {
             subtotals,
             department,
             attachments,
+            currency,
             note,
             notes,
             officerNote,
@@ -166,6 +167,7 @@ const submitClaim = async (req, res, next) => {
             contactPerson,
             contactEmail,
             reasons: reasons || [],
+            currency: currency || (items && items[0] && items[0].currency) || "GBP",
             items,
             subtotals,
             attachments: attachments || [],
@@ -557,6 +559,7 @@ const resubmitClaim = async (req, res, next) => {
             subtotals,
             department,
             attachments,
+            currency,
         } = req.body;
 
         const queryConditions = [{ claimRefNo: id }];
@@ -597,6 +600,8 @@ const resubmitClaim = async (req, res, next) => {
         if (contactEmail !== undefined) claim.contactEmail = contactEmail;
         if (department) claim.department = department;
         if (Array.isArray(attachments)) claim.attachments = attachments;
+        if (currency) claim.currency = currency;
+        else if (Array.isArray(items) && items[0] && items[0].currency) claim.currency = items[0].currency;
 
         const resubmitNote = (note || notes || "Claim corrected and resubmitted.").trim();
         claim.note = resubmitNote;
