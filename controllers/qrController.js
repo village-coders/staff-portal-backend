@@ -170,19 +170,37 @@ const streamPublicQRDocument = async (req, res, next) => {
             return res.status(404).send("QR Code not found.");
         }
 
-        let attachment = qrCode.attachments && qrCode.attachments.length > 0 ? qrCode.attachments[0] : null;
+        const attachment = qrCode.attachments && qrCode.attachments.length > 0 ? qrCode.attachments[0] : null;
 
-        if (!attachment) {
-            const newFileId = new mongoose.Types.ObjectId().toString();
-            attachment = {
-                fileName: `${qrCode.codeId}_Document.pdf`,
-                fileUrl: newFileId,
-                fileSize: "1.0 KB",
-                mimeType: "application/pdf",
-                uploadedAt: new Date(),
-            };
-            qrCode.attachments.push(attachment);
-            await qrCode.save();
+        if (!attachment || !attachment.fileUrl) {
+            if (req.headers.accept && req.headers.accept.includes("application/json")) {
+                return res.status(404).json({
+                    success: false,
+                    message: "No document uploaded for this QR code.",
+                });
+            }
+            return res.status(404).send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>No Document Uploaded</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: #1e293b; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 16px; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; max-width: 420px; text-align: center; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06); }
+    h1 { font-size: 18px; margin: 0 0 8px; color: #0f172a; }
+    p { font-size: 14px; color: #64748b; margin: 0; line-height: 1.5; }
+    .code { display: inline-block; margin-top: 14px; padding: 4px 10px; border-radius: 8px; background: #f1f5f9; font-family: monospace; font-size: 12px; color: #334155; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>No Document Uploaded</h1>
+    <p>No document has been uploaded for this QR code yet.</p>
+    <div class="code">${qrCode.codeId}</div>
+  </div>
+</body>
+</html>`);
         }
 
         if (isS3Resource(attachment.fileUrl)) {
