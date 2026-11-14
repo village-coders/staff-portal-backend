@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Asset = require("../models/Asset");
 const generateSerialNumber = require("../utils/generateSerialNumber");
-const { uploadToGridFS } = require("../utils/gridfs");
+const { uploadToS3 } = require("../utils/s3");
 
 /**
  * GET /api/v1/assets
@@ -181,10 +181,10 @@ const uploadAssetAttachments = async (req, res, next) => {
         const uploadedAttachments = [];
 
         for (const file of req.files) {
-            const gridFsId = await uploadToGridFS(file);
+            const fileUrl = await uploadToS3(file.buffer, file.originalname, file.mimetype, "assets");
             const attachment = {
                 fileName: file.originalname,
-                fileUrl: gridFsId.toString(),
+                fileUrl,
                 fileSize: `${(file.size / 1024).toFixed(2)} KB`,
                 uploadedAt: new Date(),
             };

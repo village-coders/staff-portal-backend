@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const QRCode = require("../models/QRCode");
-const { uploadToGridFS, downloadFromGridFS, deleteFromGridFS } = require("../utils/gridfs");
+const { downloadFromGridFS, deleteFromGridFS } = require("../utils/gridfs");
+const { uploadToS3, getS3Stream, deleteFromS3, extractS3Key, isS3Resource } = require("../utils/s3");
 
 /**
  * Generate unique human-readable codeId (e.g., QR-849201)
@@ -184,6 +185,29 @@ const streamPublicQRDocument = async (req, res, next) => {
             await qrCode.save();
         }
 
+        if (isS3Resource(attachment.fileUrl)) {
+            const key = extractS3Key(attachment.fileUrl);
+            try {
+                const { stream, contentType, contentLength, filename } = await getS3Stream(key);
+                res.setHeader("Content-Type", contentType);
+                if (contentLength) res.setHeader("Content-Length", contentLength);
+                res.setHeader(
+                    "Content-Disposition",
+                    `inline; filename="${encodeURIComponent(attachment.fileName || filename)}"`
+                );
+                stream.pipe(res);
+                stream.on("error", () => {
+                    if (!res.headersSent) {
+                        res.status(500).json({ success: false, message: "Error streaming file from S3." });
+                    }
+                });
+                return;
+            } catch (s3Err) {
+                console.warn(`[QR Scan] S3 stream failed for key ${key}:`, s3Err.message);
+                return res.status(404).json({ success: false, message: "Document not found in S3." });
+            }
+        }
+
         await downloadFromGridFS(attachment.fileUrl, res, {
             title: qrCode.title,
             codeId: qrCode.codeId,
@@ -223,18 +247,22 @@ const uploadQRDocument = async (req, res, next) => {
             });
         }
 
-        // If there was a previous document, clean it up from GridFS
+        // If there was a previous document, clean it up from S3 or GridFS
         if (qrCode.attachments && qrCode.attachments.length > 0) {
             for (const oldAtt of qrCode.attachments) {
                 if (oldAtt.fileUrl) {
-                    await deleteFromGridFS(oldAtt.fileUrl);
+                    if (isS3Resource(oldAtt.fileUrl)) {
+                        await deleteFromS3(oldAtt.fileUrl);
+                    } else {
+                        await deleteFromGridFS(oldAtt.fileUrl);
+                    }
                 }
             }
             qrCode.attachments = [];
         }
 
-        // Upload new file to GridFS
-        const gridFsId = await uploadToGridFS(file);
+        // Upload new file to S3 (falls back to GridFS if S3 is unconfigured/unavailable)
+        const fileUrl = await uploadToS3(file.buffer, file.originalname, file.mimetype, "qrcodes");
         const sizeInKB = (file.size / 1024).toFixed(1);
         const sizeDisplay = file.size > 1024 * 1024 
             ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
@@ -242,7 +270,7 @@ const uploadQRDocument = async (req, res, next) => {
 
         const newAttachment = {
             fileName: file.originalname,
-            fileUrl: gridFsId.toString(),
+            fileUrl,
             fileSize: sizeDisplay,
             mimeType: file.mimetype,
             uploadedAt: new Date(),
@@ -253,7 +281,7 @@ const uploadQRDocument = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
-            message: "Document uploaded to MongoDB GridFS successfully.",
+            message: "Document uploaded successfully.",
             data: qrCode,
         });
     } catch (err) {
@@ -281,11 +309,15 @@ const deleteQRCode = async (req, res, next) => {
             });
         }
 
-        // Clean up GridFS files
+        // Clean up S3 / GridFS files
         if (qrCode.attachments && qrCode.attachments.length > 0) {
             for (const att of qrCode.attachments) {
                 if (att.fileUrl) {
-                    await deleteFromGridFS(att.fileUrl);
+                    if (isS3Resource(att.fileUrl)) {
+                        await deleteFromS3(att.fileUrl);
+                    } else {
+                        await deleteFromGridFS(att.fileUrl);
+                    }
                 }
             }
         }

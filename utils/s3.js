@@ -1,0 +1,245 @@
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const dotenv = require('dotenv');
+const { uploadToGridFS } = require('./gridfs');
+
+dotenv.config();
+
+const region = process.env.AWS_REGION || 'eu-west-2';
+const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || 'hfaportal';
+
+const isS3Configured = Boolean(
+  accessKeyId &&
+  secretAccessKey &&
+  accessKeyId.trim() !== '' &&
+  secretAccessKey.trim() !== ''
+);
+
+const s3Client = isS3Configured
+  ? new S3Client({
+      region,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
+    })
+  : null;
+
+/**
+ * Sanitizes a filename to ensure safe S3 object keys.
+ */
+function sanitizeFilename(filename = 'file') {
+  const parts = filename.split('.');
+  const ext = parts.length > 1 ? parts.pop().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+  const base = parts.join('.')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 80);
+  return ext ? `${base}.${ext}` : base;
+}
+
+/**
+ * Generates an S3 key ahead of time so files (such as certificates with embedded QR codes)
+ * can know their exact future URL before the binary buffer is finalized and uploaded.
+ *
+ * @param {string} folder - Destination folder prefix in S3 (e.g. "certificates")
+ * @param {string} originalname - Original name of the file
+ * @returns {string} The S3 object key
+ */
+function generateS3Key(folder = 'certificates', originalname = 'document.pdf') {
+  const cleanFilename = sanitizeFilename(originalname);
+  return `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${cleanFilename}`;
+}
+
+/**
+ * Returns the public streaming path for a given S3 key.
+ *
+ * @param {string} key - S3 object key
+ * @returns {string} Public streaming route path
+ */
+function getS3PathFromKey(key) {
+  if (!key) return '';
+  const clean = key.startsWith('/') ? key.slice(1) : key;
+  return `/api/files/s3/${clean}`;
+}
+
+/**
+ * Uploads a file buffer to AWS S3 (or seamlessly falls back to MongoDB GridFS if S3 is not configured).
+ *
+ * @param {Buffer} buffer - File buffer from multer memoryStorage or pdf-lib
+ * @param {string} originalname - Original name of the file
+ * @param {string} mimetype - MIME type (e.g. application/pdf, image/png)
+ * @param {string} folder - Destination folder prefix in S3 (e.g. "certificates", "invoices")
+ * @param {string} [customKey=null] - Optional pre-generated S3 key
+ * @returns {Promise<string>} The file URL formatted as `/api/files/s3/${key}` or GridFS id string
+ */
+async function uploadToS3(buffer, originalname = 'document.pdf', mimetype = 'application/pdf', folder = 'uploads', customKey = null) {
+  if (!buffer) {
+    throw new Error('uploadToS3: No buffer provided');
+  }
+
+  // If S3 is not configured, fall back to MongoDB GridFS
+  if (!isS3Configured || !s3Client) {
+    const gridFsId = await uploadToGridFS(buffer, sanitizeFilename(originalname), mimetype);
+    return gridFsId.toString();
+  }
+
+  try {
+    const cleanFilename = sanitizeFilename(originalname);
+    const key = customKey || `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${cleanFilename}`;
+
+    const resolvedContentType = mimetype || (cleanFilename.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
+
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: resolvedContentType,
+      ContentDisposition: `inline; filename="${encodeURIComponent(cleanFilename)}"`,
+    });
+
+    await s3Client.send(command);
+
+    // Return the unified streaming route path so private bucket access is securely handled
+    return `/api/files/s3/${key}`;
+  } catch (s3Error) {
+    console.warn('AWS S3 upload failed, falling back to GridFS:', s3Error.message);
+    const gridFsId = await uploadToGridFS(buffer, sanitizeFilename(originalname), mimetype);
+    return gridFsId.toString();
+  }
+}
+
+/**
+ * Generates an AWS Pre-signed URL for temporary direct access to an S3 object.
+ *
+ * @param {string} key - S3 object key
+ * @param {number} expiresIn - Expiry in seconds (default 3600 = 1 hour)
+ * @returns {Promise<string>} Pre-signed URL
+ */
+async function getS3PresignedUrl(key, expiresIn = 3600) {
+  if (!isS3Configured || !s3Client) {
+    throw new Error('AWS S3 is not configured');
+  }
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+  });
+  return await getSignedUrl(s3Client, command, { expiresIn });
+}
+
+/**
+ * Retrieves a readable stream and metadata from S3 for direct streaming.
+ *
+ * @param {string} key - S3 object key
+ * @returns {Promise<{ stream: ReadableStream, contentType: string, contentLength: number, filename: string }>}
+ */
+async function getS3Stream(key) {
+  if (!isS3Configured || !s3Client) {
+    throw new Error('AWS S3 is not configured');
+  }
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+
+  if (!response.Body) {
+    const err = new Error(`S3 returned empty body for key: ${key}`);
+    err.name = 'NoSuchKey';
+    throw err;
+  }
+
+  const filename = key.split('/').pop() || 'document';
+
+  return {
+    stream: response.Body,
+    contentType: response.ContentType || 'application/octet-stream',
+    contentLength: response.ContentLength,
+    filename,
+  };
+}
+
+/**
+ * Deletes an object from AWS S3.
+ *
+ * @param {string} key - S3 object key or URL
+ */
+async function deleteFromS3(key) {
+  if (!isS3Configured || !s3Client) return;
+  try {
+    const cleanKey = extractS3Key(key);
+    if (!cleanKey) return;
+    const command = new DeleteObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: cleanKey,
+    });
+    await s3Client.send(command);
+  } catch (err) {
+    console.error(`deleteFromS3 error for key ${key}:`, err.message);
+  }
+}
+
+/**
+ * Extracts the S3 key from a URL or relative path.
+ * Supports `/api/files/s3/<key>` and full S3 bucket URLs.
+ */
+function extractS3Key(urlOrKey) {
+  if (!urlOrKey || typeof urlOrKey !== 'string') return null;
+
+  // Case 1: /api/files/s3/<key> or /api/v1/files/s3/<key>
+  if (urlOrKey.startsWith('/api/files/s3/')) {
+    return urlOrKey.replace('/api/files/s3/', '');
+  }
+  if (urlOrKey.startsWith('/api/v1/files/s3/')) {
+    return urlOrKey.replace('/api/v1/files/s3/', '');
+  }
+
+  // Case 2: s3/<key>
+  if (urlOrKey.startsWith('s3/')) {
+    return urlOrKey.replace('s3/', '');
+  }
+
+  // Case 3: https://<bucket>.s3.<region>.amazonaws.com/<key>
+  const s3Match = urlOrKey.match(/https?:\/\/[^/]+\.amazonaws\.com\/(.+?)(\?.*)?$/);
+  if (s3Match) {
+    return decodeURIComponent(s3Match[1]);
+  }
+
+  // Case 4: Plain key with a folder prefix
+  if (urlOrKey.includes('/') && !urlOrKey.startsWith('http') && !urlOrKey.startsWith('/api/files/')) {
+    return urlOrKey;
+  }
+
+  return null;
+}
+
+/**
+ * Checks if a given URL or identifier is an S3-backed resource.
+ */
+function isS3Resource(urlOrId) {
+  if (!urlOrId || typeof urlOrId !== 'string') return false;
+  return (
+    urlOrId.startsWith('/api/files/s3/') ||
+    urlOrId.startsWith('/api/v1/files/s3/') ||
+    urlOrId.startsWith('s3/') ||
+    urlOrId.includes('.amazonaws.com/')
+  );
+}
+
+module.exports = {
+  s3Client,
+  BUCKET_NAME,
+  isS3Configured,
+  generateS3Key,
+  getS3PathFromKey,
+  uploadToS3,
+  getS3PresignedUrl,
+  getS3Stream,
+  deleteFromS3,
+  extractS3Key,
+  isS3Resource,
+};
+

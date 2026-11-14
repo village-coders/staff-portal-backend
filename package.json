@@ -10,11 +10,19 @@
     "seed:qr": "node seedQRCodes.js",
     "deploy": "node deploy.cjs"
   },
-  "keywords": ["hfa", "ifrs", "claims", "financial", "api"],
+  "keywords": [
+    "hfa",
+    "ifrs",
+    "claims",
+    "financial",
+    "api"
+  ],
   "author": "Halal Food Authority",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1169.0",
+    "@aws-sdk/s3-request-presigner": "^3.1169.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

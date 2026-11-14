@@ -4,7 +4,7 @@ const User = require("../models/users");
 const generateClaimRef = require("../utils/generateClaimRef");
 const { validateTransition, normalize, normalizeRole } = require("../utils/stateMachine");
 const { sendNotification, sendNotificationToRole } = require("../utils/sendNotification");
-const { uploadToGridFS } = require("../utils/gridfs");
+const { uploadToS3 } = require("../utils/s3");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal Helper: Dispatch notifications based on transition
@@ -683,10 +683,10 @@ const uploadClaimAttachments = async (req, res, next) => {
         const uploadedAttachments = [];
 
         for (const file of req.files) {
-            const gridFsId = await uploadToGridFS(file);
+            const fileUrl = await uploadToS3(file.buffer, file.originalname, file.mimetype, "claims");
             const attachment = {
                 fileName: file.originalname,
-                fileUrl: gridFsId.toString(), // GridFS _id as string
+                fileUrl,
                 fileSize: `${(file.size / 1024).toFixed(2)} KB`,
                 uploadedAt: new Date(),
             };

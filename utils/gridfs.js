@@ -4,22 +4,30 @@ const { Readable } = require("stream");
 const BUCKET_NAME = "uploads";
 
 /**
- * Upload a file buffer (from multer memoryStorage) to MongoDB GridFS.
+ * Upload a file buffer (from multer memoryStorage or raw Buffer) to MongoDB GridFS.
  *
- * @param {Object} file - Multer file object ({ buffer, originalname, mimetype, size })
+ * @param {Object|Buffer} fileOrBuffer - Multer file object or raw Buffer
+ * @param {string} [filename] - Filename when passing a raw Buffer
+ * @param {string} [mimeType] - MIME type when passing a raw Buffer
  * @returns {Promise<ObjectId>} - GridFS file _id
  */
-const uploadToGridFS = (file) => {
+const uploadToGridFS = (fileOrBuffer, filename = "document.pdf", mimeType = "application/pdf") => {
+    const isBuffer = Buffer.isBuffer(fileOrBuffer);
+    const buffer = isBuffer ? fileOrBuffer : fileOrBuffer.buffer;
+    const originalname = isBuffer ? filename : fileOrBuffer.originalname;
+    const contentType = isBuffer ? mimeType : fileOrBuffer.mimetype;
+    const size = isBuffer ? buffer.length : fileOrBuffer.size;
+
     return new Promise((resolve, reject) => {
         const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
             bucketName: BUCKET_NAME,
         });
 
-        const readable = Readable.from(file.buffer);
-        const uploadStream = bucket.openUploadStream(file.originalname, {
+        const readable = Readable.from(buffer);
+        const uploadStream = bucket.openUploadStream(originalname, {
             metadata: {
-                contentType: file.mimetype,
-                originalSize: file.size,
+                contentType,
+                originalSize: size,
             },
         });
 

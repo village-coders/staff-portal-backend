@@ -64,6 +64,7 @@ app.use("/api/v1/claims", require("./routers/claimRouter"));
 app.use("/api/v1/assets", require("./routers/assetRouter"));
 app.use("/api/v1/notifications", require("./routers/notificationRouter"));
 app.use("/api/v1/files", require("./routers/fileRouter"));
+app.use("/api/files", require("./routers/fileRouter"));
 app.use("/api/v1/qrcodes", require("./routers/qrRouter"));
 // Dedicated QR Portal Auth & QR Users (Separated from Staff Portal)
 app.use("/api/v1/qr-auth", require("./routers/qrAuthRouter"));
