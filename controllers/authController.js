@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const User = require("../models/users");
+const verifyRecaptcha = require("../utils/verifyRecaptcha");
 
 /**
  * POST /api/v1/auth/login
@@ -8,12 +9,20 @@ const User = require("../models/users");
  */
 const login = async (req, res, next) => {
     try {
-        const { username, password } = req.body;
+        const { username, password, recaptchaToken } = req.body;
 
         if (!username || !password) {
             return res.status(400).json({
                 success: false,
                 message: "Username and password are required.",
+            });
+        }
+
+        const recaptchaCheck = await verifyRecaptcha(recaptchaToken, req.ip);
+        if (!recaptchaCheck.ok) {
+            return res.status(400).json({
+                success: false,
+                message: recaptchaCheck.message,
             });
         }
 

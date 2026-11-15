@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const QRUser = require("../models/QRUser");
+const verifyRecaptcha = require("../utils/verifyRecaptcha");
 
 /**
  * Helper to ensure default QR admin exists
@@ -30,11 +31,19 @@ const qrLogin = async (req, res, next) => {
     try {
         await ensureDefaultQRAdmin();
 
-        const { username, password } = req.body;
+        const { username, password, recaptchaToken } = req.body;
         if (!username || !password) {
             return res.status(400).json({
                 success: false,
                 message: "Username and password are required.",
+            });
+        }
+
+        const recaptchaCheck = await verifyRecaptcha(recaptchaToken, req.ip);
+        if (!recaptchaCheck.ok) {
+            return res.status(400).json({
+                success: false,
+                message: recaptchaCheck.message,
             });
         }
 
